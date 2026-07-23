@@ -200,7 +200,7 @@ def download_track(
 
     ydl_opts = _player_opts()
     ydl_opts.update({
-        "format": "bestaudio/best",
+        "format": "ba[abr<=160]/bestaudio/best",
         "noplaylist": True,
         "no_progress": True,
         "outtmpl": output_template,
