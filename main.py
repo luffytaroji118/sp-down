@@ -40,10 +40,13 @@ async def index(request: Request):
 @app.post("/api/playlist")
 async def get_playlist(data: dict):
     url = data.get("url", "").strip()
+    limit = data.get("limit")
     if not url:
         raise HTTPException(400, "URL is required")
     try:
         playlist_name, tracks = await asyncio.to_thread(fetch_tracks, url)
+        if limit and isinstance(limit, int) and limit > 0:
+            tracks = tracks[:limit]
         return {
             "name": playlist_name,
             "total": len(tracks),
@@ -57,6 +60,7 @@ async def get_playlist(data: dict):
 async def start_download(data: dict):
     url = data.get("url", "").strip()
     fmt_key = data.get("format", "mp3_320")
+    limit = data.get("limit")
     if not url:
         raise HTTPException(400, "URL is required")
     if fmt_key not in FORMAT_OPTIONS:
@@ -66,6 +70,12 @@ async def start_download(data: dict):
         playlist_name, tracks = await asyncio.to_thread(fetch_tracks, url)
     except Exception as e:
         raise HTTPException(400, str(e))
+
+    if limit and isinstance(limit, int) and limit > 0:
+        tracks = tracks[:limit]
+
+    for i, t in enumerate(tracks, 1):
+        t.index = i
 
     job_id = uuid.uuid4().hex[:12]
     safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in playlist_name)[:50]

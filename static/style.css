@@ -103,6 +103,27 @@ input[type="text"]:focus {
     cursor: pointer;
 }
 
+.limit-input {
+    background: var(--bg);
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 12px 16px;
+    color: var(--text);
+    font-size: 14px;
+    font-family: inherit;
+    outline: none;
+    width: 70px;
+    text-align: center;
+}
+
+.limit-input:focus {
+    border-color: var(--accent);
+}
+
+.limit-input::placeholder {
+    color: var(--text-sub);
+}
+
 .btn {
     border: none;
     border-radius: 8px;

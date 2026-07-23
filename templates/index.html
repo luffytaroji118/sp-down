@@ -40,6 +40,7 @@
                         <option value="{{ fmt.key }}">{{ fmt.label }}</option>
                         {% endfor %}
                     </select>
+                    <input type="number" id="limit-input" class="limit-input" min="1" placeholder="All" title="Max tracks to download">
                     <button id="download-btn" class="btn btn-green">Download All</button>
                 </div>
             </div>

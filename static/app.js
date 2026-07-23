@@ -71,7 +71,11 @@ loadBtn.addEventListener('click', async () => {
     playlistInfo.classList.add('hidden');
 
     try {
-        const data = await api('/api/playlist', { url });
+        const limitVal = document.getElementById('limit-input').value;
+        const data = await api('/api/playlist', {
+            url,
+            limit: limitVal ? parseInt(limitVal) : null,
+        });
         loadedTracks = data.tracks;
         playlistName.textContent = data.name;
         trackCount.textContent = `${data.total} tracks`;
@@ -105,9 +109,11 @@ downloadBtn.addEventListener('click', async () => {
     downloadBtn.textContent = 'Starting...';
 
     try {
+        const limitVal = document.getElementById('limit-input').value;
         const data = await api('/api/download', {
             url: urlInput.value.trim(),
             format: formatSelect.value,
+            limit: limitVal ? parseInt(limitVal) : null,
         });
         currentJobId = data.job_id;
         downloadBtn.textContent = 'Download All';
