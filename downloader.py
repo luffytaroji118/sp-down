@@ -1,7 +1,9 @@
 import os
 import re
 import shutil
+import threading
 import zipfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -21,6 +23,8 @@ else:
     else:
         print("[WARNING] FFmpeg not found! Downloads will fail.", flush=True)
 
+MAX_WORKERS = int(os.environ.get("MAX_WORKERS", 6))
+
 FORMAT_OPTIONS = {
     "mp3_320": {"codec": "mp3", "quality": "320", "ext": "mp3", "label": "MP3 320kbps"},
     "mp3_128": {"codec": "mp3", "quality": "128", "ext": "mp3", "label": "MP3 128kbps"},
@@ -38,7 +42,6 @@ def sanitize_filename(name: str) -> str:
 
 
 def _build_search_queries(track: Track) -> list[str]:
-    """Build a list of search queries to try, from most to least specific."""
     title = track.title.strip()
     artists = track.artists.strip()
     primary_artist = artists.split(",")[0].strip()
@@ -52,15 +55,12 @@ def _build_search_queries(track: Track) -> list[str]:
         f"{title} {artists}",
     ]
 
-    # Remove "(feat. ...)" from title for a cleaner fallback search
     title_clean = re.sub(r"\s*[\(\[](feat|ft|featuring)\.?\s*[^\)\]]*[\)\]]", "", title, flags=re.IGNORECASE).strip()
     if title_clean and title_clean != title:
         queries.append(f"{title_clean} {primary_artist} audio")
 
-    # Final fallback: just the title
     queries.append(f"{title} audio")
 
-    # Deduplicate while preserving order
     seen = set()
     unique = []
     for q in queries:
@@ -72,7 +72,6 @@ def _build_search_queries(track: Track) -> list[str]:
 
 
 def _search_and_pick(track: Track) -> Optional[str]:
-    """Search YouTube, return best matching video URL based on duration."""
     duration_s = track.duration_ms / 1000
     queries = _build_search_queries(track)
 
@@ -104,29 +103,23 @@ def _search_and_pick(track: Track) -> Optional[str]:
                 vid_url = entry.get("url") or entry.get("id")
                 if not vid_url:
                     continue
-                if vid_url.startswith("http"):
-                    pass
-                else:
+                if not vid_url.startswith("http"):
                     vid_url = f"https://www.youtube.com/watch?v={vid_url}"
 
-                # Score: prefer duration close to Spotify's, and official/official audio/lyrics titles
                 title = (entry.get("title") or "").lower()
 
-                # Duration score (0-100): perfect match = 100, 30s off = ~10
                 if vid_duration and duration_s:
                     diff = abs(vid_duration - duration_s)
                     dur_score = max(0, 100 - (diff * 3))
                 else:
-                    dur_score = 30  # unknown duration, give low-mid score
+                    dur_score = 30
 
-                # Keyword bonus
                 kw_bonus = 0
                 for kw in ["official", "audio", "lyrics", "topic", "vevo", "mv", "music video"]:
                     if kw in title:
                         kw_bonus += 5
                 kw_bonus = min(kw_bonus, 20)
 
-                # Penalty for live/cover/remix if original doesn't have those
                 penalty = 0
                 title_lower = track.title.lower()
                 if "remix" not in title_lower and "remix" in title:
@@ -154,7 +147,6 @@ def _search_and_pick(track: Track) -> Optional[str]:
                     best_score = score
                     best_url = vid_url
 
-            # If we found a strong match (duration within 5s + keywords), stop early
             if best_score >= 90:
                 break
 
@@ -175,7 +167,6 @@ def download_track(
     filename = sanitize_filename(f"{track.index:02d}. {track.title} - {track.artists}")
     output_template = str(output_dir / f"{filename}.%(ext)s")
 
-    # First: find the best YouTube video
     video_url = _search_and_pick(track)
     if not video_url:
         print(f"[ERROR] Track {track.index}: no YouTube match found for '{track.title}'", flush=True)
@@ -199,9 +190,9 @@ def download_track(
             },
         ],
         "geo_bypass": True,
-        "retries": 3,
-        "fragment_retries": 3,
-        "socket_timeout": 30,
+        "retries": 2,
+        "fragment_retries": 2,
+        "socket_timeout": 20,
     }
 
     if progress_hook:
@@ -229,14 +220,35 @@ def download_playlist(
     fmt_key: str,
     on_track_start: Callable[[int, Track], None] = lambda i, t: None,
     on_track_done: Callable[[int, Track, Optional[Path]], None] = lambda i, t, p: None,
-) -> Path:
+    stop_event: Optional[threading.Event] = None,
+    max_workers: int = MAX_WORKERS,
+) -> Optional[Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
-    fmt = FORMAT_OPTIONS.get(fmt_key, FORMAT_OPTIONS["mp3_320"])
 
-    for track in tracks:
+    def _worker(track):
+        if stop_event and stop_event.is_set():
+            return track.index, None
         on_track_start(track.index, track)
         result = download_track(track, output_dir, fmt_key)
-        on_track_done(track.index, track, result)
+        return track.index, result
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(_worker, t): t for t in tracks}
+
+        for future in as_completed(futures):
+            track = futures[future]
+            if stop_event and stop_event.is_set():
+                executor.shutdown(wait=False, cancel_futures=True)
+                break
+            try:
+                idx, result = future.result()
+                on_track_done(idx, tracks[idx - 1], result)
+            except Exception as e:
+                print(f"[ERROR] Worker error for track {track.index}: {e}", flush=True)
+                on_track_done(track.index, track, None)
+
+    if stop_event and stop_event.is_set():
+        return None
 
     zip_path = output_dir.parent / f"{output_dir.name}.zip"
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:

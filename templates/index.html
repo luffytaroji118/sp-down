@@ -49,7 +49,10 @@
         <div id="progress-section" class="card hidden">
             <div class="progress-header">
                 <h3>Downloading...</h3>
-                <span id="progress-text">0 / 0</span>
+                <div class="progress-header-right">
+                    <span id="progress-text">0 / 0</span>
+                    <button id="stop-btn" class="btn btn-red">Stop</button>
+                </div>
             </div>
             <div class="progress-bar-container">
                 <div id="progress-bar" class="progress-bar"></div>
@@ -68,6 +71,19 @@
                 </div>
             </div>
             <a id="download-link" class="btn btn-green btn-large" href="#">Download ZIP</a>
+        </div>
+
+        <div id="stopped-section" class="card hidden">
+            <div class="ready-header">
+                <svg viewBox="0 0 24 24" width="48" height="48" fill="#ff6b6b">
+                    <path d="M6 6h12v12H6z"/>
+                </svg>
+                <div>
+                    <h3>Download Stopped</h3>
+                    <p id="stopped-summary-text"></p>
+                </div>
+            </div>
+            <button id="back-btn" class="btn btn-primary">Back to Start</button>
         </div>
 
         <div id="loading-spinner" class="spinner hidden"></div>

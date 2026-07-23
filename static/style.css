@@ -142,6 +142,17 @@ input[type="text"]:focus {
     transform: scale(1.03);
 }
 
+.btn-red {
+    background: #e74c3c;
+    color: #fff;
+    padding: 8px 20px;
+    font-size: 14px;
+}
+
+.btn-red:hover:not(:disabled) {
+    background: #c0392b;
+}
+
 .btn-large {
     padding: 16px 48px;
     font-size: 17px;
@@ -264,6 +275,12 @@ input[type="text"]:focus {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 12px;
+}
+
+.progress-header-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
 }
 
 .progress-header h3 {

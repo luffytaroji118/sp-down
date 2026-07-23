@@ -1,12 +1,13 @@
 import asyncio
 import os
+import threading
 import uuid
 import shutil
 import time
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -71,6 +72,8 @@ async def start_download(data: dict):
     job_dir = TEMP_DIR / job_id
     song_dir = job_dir / safe_name
 
+    stop_event = threading.Event()
+
     jobs[job_id] = {
         "status": "downloading",
         "playlist_name": playlist_name,
@@ -79,22 +82,23 @@ async def start_download(data: dict):
         "failed": 0,
         "current_index": 0,
         "current_title": "",
+        "current_titles": [],
         "track_status": [None] * len(tracks),
         "zip_path": None,
         "error": None,
         "created_at": time.time(),
+        "stop_event": stop_event,
     }
 
-    asyncio.create_task(_run_download(job_id, tracks, song_dir, fmt_key))
+    asyncio.create_task(_run_download(job_id, tracks, song_dir, fmt_key, stop_event))
     return {"job_id": job_id, "total": len(tracks)}
 
 
-async def _run_download(job_id, tracks, song_dir, fmt_key):
+async def _run_download(job_id, tracks, song_dir, fmt_key, stop_event):
     job = jobs[job_id]
 
     def on_start(idx, track):
-        job["current_index"] = idx
-        job["current_title"] = track.title
+        job["track_status"][idx - 1] = "downloading"
 
     def on_done(idx, track, path):
         if path:
@@ -108,10 +112,13 @@ async def _run_download(job_id, tracks, song_dir, fmt_key):
         loop = asyncio.get_event_loop()
         zip_path = await loop.run_in_executor(
             None,
-            lambda: download_playlist(tracks, song_dir, fmt_key, on_start, on_done),
+            lambda: download_playlist(tracks, song_dir, fmt_key, on_start, on_done, stop_event),
         )
-        job["zip_path"] = str(zip_path)
-        job["status"] = "done"
+        if zip_path:
+            job["zip_path"] = str(zip_path)
+            job["status"] = "done"
+        else:
+            job["status"] = "stopped"
     except Exception as e:
         job["status"] = "error"
         job["error"] = str(e)
@@ -122,6 +129,12 @@ async def get_status(job_id: str):
     job = jobs.get(job_id)
     if not job:
         raise HTTPException(404, "Job not found")
+
+    current_titles = []
+    for i, status in enumerate(job["track_status"]):
+        if status == "downloading":
+            current_titles.append(f"Track {i + 1}")
+
     return JSONResponse({
         "status": job["status"],
         "playlist_name": job["playlist_name"],
@@ -130,9 +143,21 @@ async def get_status(job_id: str):
         "failed": job["failed"],
         "current_index": job["current_index"],
         "current_title": job["current_title"],
+        "current_downloading": current_titles,
         "track_status": job["track_status"],
         "error": job["error"],
     })
+
+
+@app.post("/api/stop/{job_id}")
+async def stop_job(job_id: str):
+    job = jobs.get(job_id)
+    if not job:
+        raise HTTPException(404, "Job not found")
+    if job["status"] != "downloading":
+        raise HTTPException(400, "Job is not running")
+    job["stop_event"].set()
+    return {"status": "stopping"}
 
 
 @app.get("/api/file/{job_id}")
@@ -161,7 +186,7 @@ async def cleanup_loop():
             now = time.time()
             to_remove = [
                 jid for jid, j in jobs.items()
-                if now - j.get("created_at", 0) > JOB_TTL and j["status"] in ("done", "error")
+                if now - j.get("created_at", 0) > JOB_TTL and j["status"] in ("done", "error", "stopped")
             ]
             for jid in to_remove:
                 job = jobs.pop(jid, None)

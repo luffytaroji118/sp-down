@@ -17,8 +17,13 @@ const downloadReady = $('download-ready');
 const downloadLink = $('download-link');
 const summaryText = $('summary-text');
 const spinner = $('loading-spinner');
+const stopBtn = $('stop-btn');
+const stoppedSection = $('stopped-section');
+const stoppedSummaryText = $('stopped-summary-text');
+const backBtn = $('back-btn');
 
 let loadedTracks = [];
+let currentJobId = null;
 
 async function api(path, body) {
     const resp = await fetch(path, {
@@ -104,14 +109,29 @@ downloadBtn.addEventListener('click', async () => {
             url: urlInput.value.trim(),
             format: formatSelect.value,
         });
-        downloadBtn.textContent = 'Downloading...';
+        currentJobId = data.job_id;
+        downloadBtn.textContent = 'Download All';
+        downloadBtn.disabled = false;
         playlistInfo.classList.add('hidden');
         progressSection.classList.remove('hidden');
+        stopBtn.disabled = false;
         pollStatus(data.job_id);
     } catch (e) {
         showError(e.message);
         downloadBtn.disabled = false;
         downloadBtn.textContent = 'Download All';
+    }
+});
+
+stopBtn.addEventListener('click', async () => {
+    if (!currentJobId) return;
+    stopBtn.disabled = true;
+    stopBtn.textContent = 'Stopping...';
+    try {
+        await api(`/api/stop/${currentJobId}`);
+    } catch (e) {
+        stopBtn.disabled = false;
+        stopBtn.textContent = 'Stop';
     }
 });
 
@@ -131,6 +151,10 @@ function pollStatus(jobId) {
                 clearInterval(pollTimer);
                 showError(data.error || 'Download failed');
                 resetDownloadBtn();
+                progressSection.classList.add('hidden');
+            } else if (data.status === 'stopped') {
+                clearInterval(pollTimer);
+                showStopped(data);
             }
         } catch (e) {
             clearInterval(pollTimer);
@@ -141,11 +165,14 @@ function pollStatus(jobId) {
 }
 
 function updateProgress(data) {
-    const pct = data.total > 0 ? (data.completed / data.total) * 100 : 0;
+    const done = data.completed + data.failed;
+    const pct = data.total > 0 ? (done / data.total) * 100 : 0;
     progressBar.style.width = `${pct}%`;
-    progressText.textContent = `${data.completed + data.failed} / ${data.total}`;
+    progressText.textContent = `${done} / ${data.total}`;
 
-    if (data.current_title) {
+    if (data.current_downloading && data.current_downloading.length > 0) {
+        currentTrack.textContent = `Downloading: ${data.current_downloading.join(', ')}`;
+    } else if (data.current_title) {
         currentTrack.textContent = `Now downloading: ${data.current_title}`;
     }
 
@@ -162,17 +189,6 @@ function updateProgress(data) {
             }
         }
     });
-
-    if (data.current_index > 0) {
-        const row = $(`track-${data.current_index - 1}`);
-        if (row) {
-            const iconEl = row.querySelector('.status-icon');
-            if (iconEl && data.track_status[data.current_index - 1] === null) {
-                iconEl.className = 'status-icon status-downloading';
-                iconEl.innerHTML = '&#8635;';
-            }
-        }
-    }
 }
 
 function showDownloadReady(jobId, data) {
@@ -181,6 +197,19 @@ function showDownloadReady(jobId, data) {
     downloadLink.href = `/api/file/${jobId}`;
     summaryText.textContent = `${data.completed} songs downloaded${data.failed > 0 ? `, ${data.failed} failed` : ''}`;
 }
+
+function showStopped(data) {
+    progressSection.classList.add('hidden');
+    stoppedSection.classList.remove('hidden');
+    stoppedSummaryText.textContent = `${data.completed} songs downloaded, ${data.failed} failed before stopping.`;
+    stopBtn.textContent = 'Stop';
+    stopBtn.disabled = false;
+}
+
+backBtn.addEventListener('click', () => {
+    stoppedSection.classList.add('hidden');
+    playlistInfo.classList.remove('hidden');
+});
 
 function resetDownloadBtn() {
     downloadBtn.disabled = false;
