@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Callable, Optional
 
+import requests
 import yt_dlp
 
 from spotify import Track
@@ -29,6 +30,7 @@ MAX_WORKERS = int(os.environ.get("MAX_WORKERS", 8))
 
 COOKIE_FILE = os.environ.get("COOKIE_FILE", "")
 COOKIES_B64 = os.environ.get("COOKIES_B64", "")
+COOKIE_SERVICE_URL = os.environ.get("COOKIE_SERVICE_URL", "")
 
 if not COOKIE_FILE and COOKIES_B64:
     try:
@@ -46,14 +48,20 @@ def _resolve_cookie_file() -> str:
     global COOKIE_FILE
     if COOKIE_FILE and os.path.isfile(COOKIE_FILE):
         return COOKIE_FILE
-    try:
-        from cookie_fetcher import get_cookie_file
-        path = get_cookie_file()
-        if path:
-            COOKIE_FILE = path
-            return path
-    except Exception as e:
-        print(f"[COOKIES] Auto-fetch failed: {e}", flush=True)
+    if COOKIE_SERVICE_URL:
+        try:
+            resp = requests.get(f"{COOKIE_SERVICE_URL}/cookies.txt", timeout=60)
+            if resp.status_code == 200 and resp.text.strip():
+                cookie_path = os.path.join(tempfile.gettempdir(), "yt_cookies.txt")
+                with open(cookie_path, "w") as f:
+                    f.write(resp.text)
+                COOKIE_FILE = cookie_path
+                print(f"[INFO] Fetched cookies from cookie service", flush=True)
+                return cookie_path
+            else:
+                print(f"[COOKIES] Service returned {resp.status_code}", flush=True)
+        except Exception as e:
+            print(f"[COOKIES] Failed to fetch from service: {e}", flush=True)
     return ""
 
 FORMAT_OPTIONS = {
