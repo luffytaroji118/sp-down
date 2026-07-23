@@ -25,7 +25,7 @@ RUN apt-get update && \
         libcups2 \
         libdbus-1-3 \
         libexpat1 \
-        libgdk-pixbuf2.0-0 \
+        libgdk-pixbuf-2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 ENV PYTHONUNBUFFERED=1
