@@ -180,6 +180,12 @@ async def download_file(job_id: str):
 
 @app.on_event("startup")
 async def cleanup_loop():
+    try:
+        from cookie_fetcher import start_cookie_fetcher
+        start_cookie_fetcher()
+    except Exception as e:
+        print(f"[COOKIES] Failed to start fetcher: {e}", flush=True)
+
     async def _cleanup():
         while True:
             await asyncio.sleep(300)

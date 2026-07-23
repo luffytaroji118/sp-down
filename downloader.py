@@ -41,10 +41,20 @@ if not COOKIE_FILE and COOKIES_B64:
     except Exception as e:
         print(f"[WARNING] Failed to decode COOKIES_B64: {e}", flush=True)
 
-if COOKIE_FILE and os.path.isfile(COOKIE_FILE):
-    print(f"[INFO] Using cookie file: {COOKIE_FILE}", flush=True)
-else:
-    print("[WARNING] No cookies configured. YouTube bot detection may block downloads on datacenter IPs.", flush=True)
+
+def _resolve_cookie_file() -> str:
+    global COOKIE_FILE
+    if COOKIE_FILE and os.path.isfile(COOKIE_FILE):
+        return COOKIE_FILE
+    try:
+        from cookie_fetcher import get_cookie_file
+        path = get_cookie_file()
+        if path:
+            COOKIE_FILE = path
+            return path
+    except Exception as e:
+        print(f"[COOKIES] Auto-fetch failed: {e}", flush=True)
+    return ""
 
 FORMAT_OPTIONS = {
     "mp3_320": {"codec": "mp3", "quality": "320", "ext": "mp3", "label": "MP3 320kbps"},
@@ -61,8 +71,9 @@ def _base_opts() -> dict:
         "geo_bypass": True,
         "socket_timeout": 10,
     }
-    if COOKIE_FILE and os.path.isfile(COOKIE_FILE):
-        opts["cookiefile"] = COOKIE_FILE
+    cookie_path = _resolve_cookie_file()
+    if cookie_path:
+        opts["cookiefile"] = cookie_path
     return opts
 
 

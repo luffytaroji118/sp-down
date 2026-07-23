@@ -5,3 +5,4 @@ downloads_temp/
 .env
 *.log
 test_search.py
+yt_cookies.txt
