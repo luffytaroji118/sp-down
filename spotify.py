@@ -4,6 +4,7 @@ import urllib.parse
 import base64
 import json
 import re
+import time
 from dataclasses import dataclass, asdict
 from typing import Optional
 
@@ -45,88 +46,9 @@ def extract_playlist_id(url: str) -> str:
     raise ValueError(f"Could not extract playlist ID from: {url}")
 
 
-def _get_spotify_token() -> Optional[str]:
-    client_id = os.environ.get("SPOTIPY_CLIENT_ID", "")
-    client_secret = os.environ.get("SPOTIPY_CLIENT_SECRET", "")
-    if not client_id or not client_secret:
-        return None
-    try:
-        auth = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
-        data = urllib.parse.urlencode({"grant_type": "client_credentials"}).encode()
-        req = urllib.request.Request(
-            "https://accounts.spotify.com/api/token",
-            data=data,
-            headers={
-                "Authorization": f"Basic {auth}",
-                "Content-Type": "application/x-www-form-urlencoded",
-            },
-        )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            token_data = json.loads(resp.read().decode("utf-8"))
-            return token_data.get("access_token")
-    except Exception as e:
-        print(f"[SPOTIFY] Token error: {e}", flush=True)
-        return None
-
-
-def _fetch_via_api(playlist_id: str) -> tuple[str, list[Track]]:
-    token = _get_spotify_token()
-    if not token:
-        raise ValueError("No Spotify API credentials configured")
-
-    headers = {"Authorization": f"Bearer {token}"}
-
-    playlist_url = f"https://api.spotify.com/v1/playlists/{playlist_id}?fields=name,tracks(total)"
-    req = urllib.request.Request(playlist_url, headers=headers)
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        pl_data = json.loads(resp.read().decode("utf-8"))
-
-    playlist_name = pl_data.get("name", "Unknown Playlist")
-    total = pl_data.get("tracks", {}).get("total", 0)
-    print(f"[SPOTIFY] Playlist '{playlist_name}' has {total} tracks", flush=True)
-
-    tracks = []
-    offset = 0
-    limit = 100
-
-    while offset < total:
-        api_url = f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks?offset={offset}&limit={limit}&fields=items(track(name,artists(name),duration_ms,uri,is_playable))"
-        req = urllib.request.Request(api_url, headers=headers)
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-
-        items = data.get("items", [])
-        if not items:
-            break
-
-        for item in items:
-            t = item.get("track")
-            if not t:
-                continue
-            idx = len(tracks) + 1
-            title = t.get("name", "Unknown")
-            artists = ", ".join(a.get("name", "") for a in t.get("artists", []))
-            tracks.append(
-                Track(
-                    index=idx,
-                    title=title,
-                    artists=artists or "Unknown",
-                    duration_ms=t.get("duration_ms", 0),
-                    spotify_uri=t.get("uri", ""),
-                    is_playable=t.get("is_playable", True),
-                )
-            )
-
-        offset += limit
-        print(f"[SPOTIFY] Fetched {len(tracks)}/{total} tracks...", flush=True)
-
-    return playlist_name, tracks
-
-
-def _fetch_via_embed(playlist_url: str) -> tuple[str, list[Track]]:
-    playlist_id = extract_playlist_id(playlist_url)
+def _fetch_via_embed_token(playlist_id: str) -> tuple[str, list[Track]]:
+    """Fetch all tracks using the access token from Spotify's embed page."""
     embed_url = f"https://open.spotify.com/embed/playlist/{playlist_id}"
-
     req = urllib.request.Request(
         embed_url,
         headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"},
@@ -143,15 +65,27 @@ def _fetch_via_embed(playlist_url: str) -> tuple[str, list[Track]]:
         raise ValueError("Could not find track data in Spotify embed page")
 
     data = json.loads(match.group(1))
+
+    # Get the access token from the embed page's session data
+    token = (
+        data.get("props", {})
+        .get("pageProps", {})
+        .get("state", {})
+        .get("settings", {})
+        .get("session", {})
+        .get("accessToken", "")
+    )
+
+    # Get initial tracks from embed page
     entity = data["props"]["pageProps"]["state"]["data"]["entity"]
     playlist_name = entity.get("title", "Unknown Playlist")
     track_list = entity.get("trackList", [])
 
     tracks = []
-    for i, t in enumerate(track_list, 1):
+    for t in track_list:
         tracks.append(
             Track(
-                index=i,
+                index=len(tracks) + 1,
                 title=t.get("title", "Unknown"),
                 artists=t.get("subtitle", "Unknown"),
                 duration_ms=t.get("duration", 0),
@@ -160,16 +94,82 @@ def _fetch_via_embed(playlist_url: str) -> tuple[str, list[Track]]:
             )
         )
 
+    print(f"[SPOTIFY] Embed page returned {len(tracks)} tracks", flush=True)
+
+    # If we have a token, paginate to get remaining tracks
+    if token and len(tracks) > 0:
+        import urllib.error
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Get total track count
+        try:
+            time.sleep(1)
+            pl_req = urllib.request.Request(
+                f"https://api.spotify.com/v1/playlists/{playlist_id}?fields=name,tracks(total)",
+                headers=headers,
+            )
+            with urllib.request.urlopen(pl_req, timeout=15) as resp:
+                pl_data = json.loads(resp.read().decode("utf-8"))
+            total = pl_data.get("tracks", {}).get("total", 0)
+            print(f"[SPOTIFY] API says total tracks: {total}", flush=True)
+
+            if total > len(tracks):
+                offset = len(tracks)
+                while offset < total:
+                    time.sleep(2)
+                    api_url = (
+                        f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks"
+                        f"?offset={offset}&limit=50"
+                        f"&fields=items(track(name,artists(name),duration_ms,uri,is_playable))"
+                    )
+                    req = urllib.request.Request(api_url, headers=headers)
+                    try:
+                        with urllib.request.urlopen(req, timeout=15) as resp:
+                            page_data = json.loads(resp.read().decode("utf-8"))
+                    except urllib.error.HTTPError as e:
+                        if e.code == 429:
+                            retry_after = int(e.headers.get("Retry-After", "10"))
+                            print(f"[SPOTIFY] Rate limited, waiting {retry_after}s...", flush=True)
+                            time.sleep(retry_after)
+                            continue
+                        else:
+                            print(f"[SPOTIFY] API error {e.code} at offset {offset}", flush=True)
+                            break
+
+                    items = page_data.get("items", [])
+                    if not items:
+                        break
+
+                    for item in items:
+                        t = item.get("track")
+                        if not t:
+                            continue
+                        artists = ", ".join(a.get("name", "") for a in t.get("artists", []))
+                        tracks.append(
+                            Track(
+                                index=len(tracks) + 1,
+                                title=t.get("name", "Unknown"),
+                                artists=artists or "Unknown",
+                                duration_ms=t.get("duration_ms", 0),
+                                spotify_uri=t.get("uri", ""),
+                                is_playable=t.get("is_playable", True),
+                            )
+                        )
+
+                    offset += len(items)
+                    print(f"[SPOTIFY] Fetched {len(tracks)}/{total} tracks", flush=True)
+
+        except urllib.error.HTTPError as e:
+            if e.code == 429:
+                print(f"[SPOTIFY] Rate limited on initial request, using {len(tracks)} embed tracks", flush=True)
+            else:
+                print(f"[SPOTIFY] API error {e.code}, using {len(tracks)} embed tracks", flush=True)
+        except Exception as e:
+            print(f"[SPOTIFY] Pagination error: {e}, using {len(tracks)} embed tracks", flush=True)
+
     return playlist_name, tracks
 
 
 def fetch_tracks(playlist_url: str) -> tuple[str, list[Track]]:
     playlist_id = extract_playlist_id(playlist_url)
-
-    if os.environ.get("SPOTIPY_CLIENT_ID") and os.environ.get("SPOTIPY_CLIENT_SECRET"):
-        try:
-            return _fetch_via_api(playlist_id)
-        except Exception as e:
-            print(f"[SPOTIFY] API failed, falling back to embed: {e}", flush=True)
-
-    return _fetch_via_embed(playlist_url)
+    return _fetch_via_embed_token(playlist_id)
