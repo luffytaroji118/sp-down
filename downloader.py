@@ -24,7 +24,7 @@ else:
     else:
         print("[WARNING] FFmpeg not found! Downloads will fail.", flush=True)
 
-MAX_WORKERS = int(os.environ.get("MAX_WORKERS", 8))
+MAX_WORKERS = int(os.environ.get("MAX_WORKERS", 16))
 
 PROXY_RAW = os.environ.get("PROXY", "")
 PROXY_URL = ""
@@ -205,6 +205,7 @@ def download_track(
         "noplaylist": True,
         "no_progress": True,
         "outtmpl": output_template,
+        "concurrent_fragment_downloads": 4,
         "postprocessors": [
             {
                 "key": "FFmpegExtractAudio",
@@ -215,8 +216,9 @@ def download_track(
                 "key": "FFmpegMetadata",
             },
         ],
-        "retries": 2,
-        "fragment_retries": 2,
+        "retries": 3,
+        "fragment_retries": 3,
+        "http_chunk_size": 1048576,
     })
 
     if progress_hook:
