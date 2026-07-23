@@ -1,6 +1,8 @@
 import os
+import base64
 import re
 import shutil
+import tempfile
 import threading
 import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -24,7 +26,25 @@ else:
         print("[WARNING] FFmpeg not found! Downloads will fail.", flush=True)
 
 MAX_WORKERS = int(os.environ.get("MAX_WORKERS", 8))
+
 COOKIE_FILE = os.environ.get("COOKIE_FILE", "")
+COOKIES_B64 = os.environ.get("COOKIES_B64", "")
+
+if not COOKIE_FILE and COOKIES_B64:
+    try:
+        cookie_data = base64.b64decode(COOKIES_B64).decode("utf-8")
+        cookie_path = os.path.join(tempfile.gettempdir(), "yt_cookies.txt")
+        with open(cookie_path, "w") as f:
+            f.write(cookie_data)
+        COOKIE_FILE = cookie_path
+        print(f"[INFO] Cookies decoded from COOKIES_B64 env var", flush=True)
+    except Exception as e:
+        print(f"[WARNING] Failed to decode COOKIES_B64: {e}", flush=True)
+
+if COOKIE_FILE and os.path.isfile(COOKIE_FILE):
+    print(f"[INFO] Using cookie file: {COOKIE_FILE}", flush=True)
+else:
+    print("[WARNING] No cookies configured. YouTube bot detection may block downloads on datacenter IPs.", flush=True)
 
 FORMAT_OPTIONS = {
     "mp3_320": {"codec": "mp3", "quality": "320", "ext": "mp3", "label": "MP3 320kbps"},
@@ -50,7 +70,7 @@ def _player_opts() -> dict:
     opts = _base_opts()
     opts["extractor_args"] = {
         "youtube": {
-            "player_client": ["android", "ios", "web"],
+            "player_client": ["android", "ios", "tv", "web"],
             "player_skip": ["webpage"],
         }
     }
