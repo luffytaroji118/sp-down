@@ -23,7 +23,7 @@ else:
     else:
         print("[WARNING] FFmpeg not found! Downloads will fail.", flush=True)
 
-MAX_WORKERS = int(os.environ.get("MAX_WORKERS", 6))
+MAX_WORKERS = int(os.environ.get("MAX_WORKERS", 12))
 
 FORMAT_OPTIONS = {
     "mp3_320": {"codec": "mp3", "quality": "320", "ext": "mp3", "label": "MP3 320kbps"},
@@ -51,24 +51,8 @@ def _build_search_queries(track: Track) -> list[str]:
         f"{title} {primary_artist} lyrics",
         f"{title} {primary_artist} topic",
         f"{title} {primary_artist}",
-        f'{title} "{primary_artist}"',
-        f"{title} {artists}",
+        f"{title} audio",
     ]
-
-    title_clean = re.sub(r"\s*[\(\[](feat|ft|featuring)\.?\s*[^\)\]]*[\)\]]", "", title, flags=re.IGNORECASE).strip()
-    if title_clean and title_clean != title:
-        queries.append(f"{title_clean} {primary_artist} audio")
-
-    queries.append(f"{title} audio")
-
-    seen = set()
-    unique = []
-    for q in queries:
-        q = q.strip()
-        if q and q not in seen:
-            seen.add(q)
-            unique.append(q)
-    return unique
 
 
 def _search_and_pick(track: Track) -> Optional[str]:
@@ -85,12 +69,12 @@ def _search_and_pick(track: Track) -> Optional[str]:
                 "no_warnings": True,
                 "skip_download": True,
                 "extract_flat": True,
-                "default_search": "ytsearch5",
+                "default_search": "ytsearch3",
                 "geo_bypass": True,
-                "socket_timeout": 15,
+                "socket_timeout": 8,
             }
             with yt_dlp.YoutubeDL(search_opts) as ydl:
-                info = ydl.extract_info(f"ytsearch5:{query}", download=False)
+                info = ydl.extract_info(f"ytsearch3:{query}", download=False)
 
             entries = info.get("entries", []) if info else []
             if not entries:
@@ -147,7 +131,7 @@ def _search_and_pick(track: Track) -> Optional[str]:
                     best_score = score
                     best_url = vid_url
 
-            if best_score >= 90:
+            if best_score >= 80:
                 break
 
         except Exception as e:
@@ -190,9 +174,9 @@ def download_track(
             },
         ],
         "geo_bypass": True,
-        "retries": 2,
-        "fragment_retries": 2,
-        "socket_timeout": 20,
+        "retries": 1,
+        "fragment_retries": 1,
+        "socket_timeout": 15,
     }
 
     if progress_hook:
