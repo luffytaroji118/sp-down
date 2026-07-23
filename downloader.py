@@ -55,10 +55,48 @@ def _piped_get(path: str, timeout: int = 15) -> Optional[dict]:
             url = f"{instance}{path}"
             req = urllib.request.Request(url, headers={"User-Agent": _UA})
             with urllib.request.urlopen(req, timeout=timeout) as resp:
-                return json.loads(resp.read().decode("utf-8"))
+                data = json.loads(resp.read().decode("utf-8"))
+                if data and "error" not in data:
+                    return data
+                else:
+                    err_msg = data.get("error", "") if data else ""
+                    if "bot" in err_msg.lower() or "blocked" in err_msg.lower():
+                        continue
+                    return data
         except Exception:
             continue
     return None
+
+
+def _piped_get_stream_urls(video_id: str) -> list[str]:
+    """Try all Piped instances, collect all audio+video stream URLs."""
+    urls = []
+    for instance in PIPED_INSTANCES:
+        try:
+            url = f"{instance}/streams/{video_id}"
+            req = urllib.request.Request(url, headers={"User-Agent": _UA})
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                if not data or "error" in data:
+                    continue
+
+                for s in data.get("audioStreams", []):
+                    u = s.get("url")
+                    if u:
+                        urls.append(u)
+
+                if not urls:
+                    for s in data.get("videoStreams", []):
+                        if not s.get("videoOnly", True):
+                            u = s.get("url")
+                            if u:
+                                urls.append(u)
+
+                if urls:
+                    return urls
+        except Exception:
+            continue
+    return urls
 
 
 def _piped_search(query: str, limit: int = 5) -> list[dict]:
@@ -167,21 +205,8 @@ def _search_and_pick(track: Track) -> Optional[str]:
 
 
 def _get_audio_stream(video_id: str) -> Optional[str]:
-    data = _piped_get(f"/streams/{video_id}", timeout=20)
-    if not data:
-        return None
-
-    audio_streams = data.get("audioStreams", [])
-    if audio_streams:
-        best = max(audio_streams, key=lambda s: s.get("bitrate", 0))
-        return best.get("url")
-
-    video_streams = data.get("videoStreams", [])
-    combined = [s for s in video_streams if not s.get("videoOnly", True)]
-    if combined:
-        return combined[0].get("url")
-
-    return None
+    urls = _piped_get_stream_urls(video_id)
+    return urls[0] if urls else None
 
 
 def _download_file(url: str, dest: str, timeout: int = 60) -> bool:
