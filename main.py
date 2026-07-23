@@ -109,6 +109,16 @@ async def _run_download(job_id, tracks, song_dir, fmt_key, stop_event):
             job["failed"] += 1
 
     try:
+        from cookie_fetcher import get_cookie_file
+        cookie_path = await asyncio.to_thread(get_cookie_file)
+        if cookie_path:
+            print(f"[DOWNLOAD] Cookies ready: {cookie_path}", flush=True)
+        else:
+            print("[DOWNLOAD] No cookies available, proceeding without", flush=True)
+    except Exception as e:
+        print(f"[DOWNLOAD] Cookie pre-fetch failed: {e}", flush=True)
+
+    try:
         loop = asyncio.get_event_loop()
         zip_path = await loop.run_in_executor(
             None,

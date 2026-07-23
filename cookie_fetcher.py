@@ -38,15 +38,19 @@ async def _fetch_cookies_async() -> Optional[str]:
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument("--disable-gpu")
+        options.start_timeout = 15
 
         async with Chrome(options=options) as browser:
             tab = await browser.start()
 
             try:
-                async with tab.expect_and_bypass_cloudflare_captcha():
-                    await tab.go_to("https://www.youtube.com/")
-            except Exception:
-                await tab.go_to("https://www.youtube.com/")
+                await asyncio.wait_for(
+                    tab.go_to("https://www.youtube.com/"), timeout=15
+                )
+            except asyncio.TimeoutError:
+                print("[COOKIES] YouTube homepage load timed out", flush=True)
+            except Exception as e:
+                print(f"[COOKIES] Homepage navigation error: {e}", flush=True)
 
             await asyncio.sleep(5)
 
