@@ -22,7 +22,7 @@ else:
     else:
         print("[WARNING] FFmpeg not found! Downloads will fail.", flush=True)
 
-MAX_WORKERS = int(os.environ.get("MAX_WORKERS", 8))
+MAX_WORKERS = int(os.environ.get("MAX_WORKERS", 4))
 
 PROXY_RAW = os.environ.get("PROXY", "")
 PROXY_URL = ""
@@ -213,6 +213,7 @@ def download_track(
         ],
         "retries": 2,
         "fragment_retries": 2,
+        "proxy": "",
     })
 
     if progress_hook:
