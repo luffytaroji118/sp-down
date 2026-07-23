@@ -23,7 +23,8 @@ else:
     else:
         print("[WARNING] FFmpeg not found! Downloads will fail.", flush=True)
 
-MAX_WORKERS = int(os.environ.get("MAX_WORKERS", 12))
+MAX_WORKERS = int(os.environ.get("MAX_WORKERS", 8))
+COOKIE_FILE = os.environ.get("COOKIE_FILE", "")
 
 FORMAT_OPTIONS = {
     "mp3_320": {"codec": "mp3", "quality": "320", "ext": "mp3", "label": "MP3 320kbps"},
@@ -31,6 +32,29 @@ FORMAT_OPTIONS = {
     "flac": {"codec": "flac", "quality": "0", "ext": "flac", "label": "FLAC (Lossless)"},
     "m4a": {"codec": "m4a", "quality": "0", "ext": "m4a", "label": "M4A (AAC)"},
 }
+
+
+def _base_opts() -> dict:
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "geo_bypass": True,
+        "socket_timeout": 10,
+    }
+    if COOKIE_FILE and os.path.isfile(COOKIE_FILE):
+        opts["cookiefile"] = COOKIE_FILE
+    return opts
+
+
+def _player_opts() -> dict:
+    opts = _base_opts()
+    opts["extractor_args"] = {
+        "youtube": {
+            "player_client": ["android", "ios", "web"],
+            "player_skip": ["webpage"],
+        }
+    }
+    return opts
 
 
 def sanitize_filename(name: str) -> str:
@@ -53,6 +77,14 @@ def _build_search_queries(track: Track) -> list[str]:
         f"{title} {primary_artist}",
         f"{title} audio",
     ]
+    seen = set()
+    unique = []
+    for q in queries:
+        q = q.strip()
+        if q and q not in seen:
+            seen.add(q)
+            unique.append(q)
+    return unique
 
 
 def _search_and_pick(track: Track) -> Optional[str]:
@@ -64,15 +96,12 @@ def _search_and_pick(track: Track) -> Optional[str]:
 
     for query in queries:
         try:
-            search_opts = {
-                "quiet": True,
-                "no_warnings": True,
+            search_opts = _player_opts()
+            search_opts.update({
                 "skip_download": True,
                 "extract_flat": True,
                 "default_search": "ytsearch3",
-                "geo_bypass": True,
-                "socket_timeout": 8,
-            }
+            })
             with yt_dlp.YoutubeDL(search_opts) as ydl:
                 info = ydl.extract_info(f"ytsearch3:{query}", download=False)
 
@@ -156,11 +185,10 @@ def download_track(
         print(f"[ERROR] Track {track.index}: no YouTube match found for '{track.title}'", flush=True)
         return None
 
-    ydl_opts = {
+    ydl_opts = _player_opts()
+    ydl_opts.update({
         "format": "bestaudio/best",
         "noplaylist": True,
-        "quiet": True,
-        "no_warnings": True,
         "no_progress": True,
         "outtmpl": output_template,
         "postprocessors": [
@@ -173,11 +201,9 @@ def download_track(
                 "key": "FFmpegMetadata",
             },
         ],
-        "geo_bypass": True,
         "retries": 1,
         "fragment_retries": 1,
-        "socket_timeout": 15,
-    }
+    })
 
     if progress_hook:
         ydl_opts["progress_hooks"] = [progress_hook]
