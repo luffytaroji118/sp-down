@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.pyo
+downloads_temp/
+.env
+*.log
+test_search.py

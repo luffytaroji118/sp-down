@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spotify Playlist Downloader</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <svg viewBox="0 0 24 24" width="40" height="40" fill="currentColor">
+                    <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.5 17.3c-.2.4-.7.5-1.1.3-3-1.8-6.8-2.2-11.2-1.2-.4.1-.9-.2-1-.6-.1-.4.2-.9.6-1 4.9-1.1 9.1-.6 12.4 1.4.4.2.6.7.3 1.1zm1.5-3.3c-.3.4-.8.6-1.3.3-3.5-2.1-8.8-2.8-12.9-1.5-.5.2-1.1-.1-1.3-.6-.2-.5.1-1.1.6-1.3 4.7-1.4 10.5-.7 14.5 1.7.5.3.6.9.4 1.4zm.1-3.5C15.1 8 8.7 7.8 4.8 9c-.6.2-1.3-.2-1.4-.8-.2-.6.2-1.3.8-1.4 4.5-1.3 11.5-1.1 16 1.6.6.3.8 1.1.4 1.7-.3.5-1.1.7-1.6.3z"/>
+                </svg>
+                <h1>Playlist Downloader</h1>
+            </div>
+            <p class="subtitle">Paste a Spotify playlist link and download all songs in high quality</p>
+        </header>
+
+        <div class="card input-card">
+            <div class="input-group">
+                <input type="text" id="playlist-url" placeholder="https://open.spotify.com/playlist/..." autocomplete="off">
+                <button id="load-btn" class="btn btn-primary">Load</button>
+            </div>
+            <div id="input-error" class="error-msg"></div>
+        </div>
+
+        <div id="playlist-info" class="card playlist-card hidden">
+            <div class="playlist-header">
+                <div>
+                    <h2 id="playlist-name"></h2>
+                    <span id="track-count" class="track-count"></span>
+                </div>
+                <div class="download-controls">
+                    <select id="format-select" class="select">
+                        {% for fmt in formats %}
+                        <option value="{{ fmt.key }}">{{ fmt.label }}</option>
+                        {% endfor %}
+                    </select>
+                    <button id="download-btn" class="btn btn-green">Download All</button>
+                </div>
+            </div>
+            <div id="track-list" class="track-list"></div>
+        </div>
+
+        <div id="progress-section" class="card hidden">
+            <div class="progress-header">
+                <h3>Downloading...</h3>
+                <span id="progress-text">0 / 0</span>
+            </div>
+            <div class="progress-bar-container">
+                <div id="progress-bar" class="progress-bar"></div>
+            </div>
+            <div id="current-track" class="current-track"></div>
+        </div>
+
+        <div id="download-ready" class="card hidden">
+            <div class="ready-header">
+                <svg viewBox="0 0 24 24" width="48" height="48" fill="#1DB954">
+                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                </svg>
+                <div>
+                    <h3>Download Ready!</h3>
+                    <p id="summary-text"></p>
+                </div>
+            </div>
+            <a id="download-link" class="btn btn-green btn-large" href="#">Download ZIP</a>
+        </div>
+
+        <div id="loading-spinner" class="spinner hidden"></div>
+
+        <footer>
+            <p>For personal use only. Downloads audio from YouTube based on track names.</p>
+        </footer>
+    </div>
+    <script src="/static/app.js"></script>
+</body>
+</html>
