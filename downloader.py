@@ -183,16 +183,6 @@ def _search_and_pick(track: Track) -> Optional[str]:
     return best_url
 
 
-def _get_format_selector(fmt_key: str) -> str:
-    if fmt_key in ("mp3_320", "flac"):
-        return "bestaudio/best"
-    elif fmt_key == "mp3_128":
-        return "ba[abr<=128]/ba[abr<=256]/bestaudio/best"
-    elif fmt_key == "m4a":
-        return "ba[ext=m4a]/bestaudio/best"
-    return "bestaudio/best"
-
-
 def download_track(
     track: Track,
     output_dir: Path,
@@ -210,19 +200,12 @@ def download_track(
 
     ydl_opts = _player_opts()
     ydl_opts.update({
-        "format": _get_format_selector(fmt_key),
+        "format": "bestaudio/best",
         "noplaylist": True,
         "no_progress": True,
         "outtmpl": output_template,
-        "concurrent_fragment_downloads": 4,
-        "retries": 3,
-        "fragment_retries": 3,
-        "http_chunk_size": 1048576,
-    })
-
-    needs_conversion = fmt_key != "m4a"
-    if needs_conversion:
-        ydl_opts["postprocessors"] = [
+        "concurrent_fragment_downloads": 8,
+        "postprocessors": [
             {
                 "key": "FFmpegExtractAudio",
                 "preferredcodec": fmt["codec"],
@@ -231,9 +214,11 @@ def download_track(
             {
                 "key": "FFmpegMetadata",
             },
-        ]
-    else:
-        ydl_opts["postprocessors"] = [{"key": "FFmpegMetadata"}]
+        ],
+        "retries": 3,
+        "fragment_retries": 3,
+        "http_chunk_size": 1048576,
+    })
 
     if progress_hook:
         ydl_opts["progress_hooks"] = [progress_hook]
