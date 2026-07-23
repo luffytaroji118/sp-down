@@ -21,10 +21,14 @@ def _to_netscape(cookies: list[dict]) -> str:
         value = c.get("value", "")
         path = c.get("path", "/")
         secure = "TRUE" if c.get("secure", True) else "FALSE"
-        expiry = int(c.get("expires", time.time() + 86400 * 365))
+        expires = c.get("expires", -1)
+        if expires == -1 or expires is None:
+            expiry = int(time.time()) + 86400 * 365
+        else:
+            expiry = int(expires)
         host = c.get("domain", ".youtube.com")
         lines.append(f"{host}\tTRUE\t{path}\t{secure}\t{expiry}\t{name}\t{value}")
-    return "\n".join(lines) + "\n"
+    return "\r\n".join(lines) + "\r\n"
 
 
 async def _fetch() -> Optional[list[dict]]:

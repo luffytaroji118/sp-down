@@ -50,16 +50,16 @@ def _resolve_cookie_file() -> str:
         return COOKIE_FILE
     if COOKIE_SERVICE_URL:
         try:
-            resp = requests.get(f"{COOKIE_SERVICE_URL}/cookies.txt", timeout=60)
+            resp = requests.get(f"{COOKIE_SERVICE_URL}/cookies.txt", timeout=90)
             if resp.status_code == 200 and resp.text.strip():
                 cookie_path = os.path.join(tempfile.gettempdir(), "yt_cookies.txt")
-                with open(cookie_path, "w") as f:
+                with open(cookie_path, "w", newline="") as f:
                     f.write(resp.text)
                 COOKIE_FILE = cookie_path
-                print(f"[INFO] Fetched cookies from cookie service", flush=True)
+                print(f"[INFO] Fetched cookies from cookie service ({len(resp.text)} bytes)", flush=True)
                 return cookie_path
             else:
-                print(f"[COOKIES] Service returned {resp.status_code}", flush=True)
+                print(f"[COOKIES] Service returned {resp.status_code}: {resp.text[:200]}", flush=True)
         except Exception as e:
             print(f"[COOKIES] Failed to fetch from service: {e}", flush=True)
     return ""
