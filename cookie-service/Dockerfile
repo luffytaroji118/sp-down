@@ -10,6 +10,22 @@ RUN apt-get update && \
         libgbm1 \
         libasound2 \
         libxshmfence1 \
+        libxcomposite1 \
+        libxdamage1 \
+        libxfixes3 \
+        libxrandr2 \
+        libxss1 \
+        libxcursor1 \
+        libxinerama1 \
+        libpangocairo-1.0-0 \
+        libgtk-3-0 \
+        libcairo2 \
+        libpango-1.0-0 \
+        libatk1.0-0 \
+        libcups2 \
+        libdbus-1-3 \
+        libexpat1 \
+        libgdk-pixbuf2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 ENV PYTHONUNBUFFERED=1
