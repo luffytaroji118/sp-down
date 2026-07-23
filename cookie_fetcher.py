@@ -27,10 +27,19 @@ def _format_cookie_file(cookies: list[dict]) -> str:
 
 async def _fetch_cookies_async() -> Optional[str]:
     from pydoll.browser.chromium import Chrome
+    from pydoll.browser.options import ChromiumOptions
 
     print("[COOKIES] Launching Pydoll browser to fetch YouTube cookies...", flush=True)
     try:
-        async with Chrome() as browser:
+        chrome_path = os.environ.get("CHROME_PATH", "/usr/bin/chromium")
+        options = ChromiumOptions()
+        options.binary_location = chrome_path
+        options.headless = True
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-gpu")
+
+        async with Chrome(options=options) as browser:
             tab = await browser.start()
 
             try:
