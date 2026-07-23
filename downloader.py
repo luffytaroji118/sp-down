@@ -1,7 +1,9 @@
 import os
 import re
 import shutil
+import subprocess
 import threading
+import urllib.request
 import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -22,7 +24,7 @@ else:
     else:
         print("[WARNING] FFmpeg not found! Downloads will fail.", flush=True)
 
-MAX_WORKERS = int(os.environ.get("MAX_WORKERS", 4))
+MAX_WORKERS = int(os.environ.get("MAX_WORKERS", 8))
 
 PROXY_RAW = os.environ.get("PROXY", "")
 PROXY_URL = ""
@@ -40,11 +42,13 @@ else:
     print("[WARNING] No proxy configured. YouTube bot detection may block downloads.", flush=True)
 
 FORMAT_OPTIONS = {
-    "mp3_320": {"codec": "mp3", "quality": "320", "ext": "mp3", "label": "MP3 320kbps"},
-    "mp3_128": {"codec": "mp3", "quality": "128", "ext": "mp3", "label": "MP3 128kbps"},
+    "mp3_320": {"codec": "libmp3lame", "quality": "320k", "ext": "mp3", "label": "MP3 320kbps"},
+    "mp3_128": {"codec": "libmp3lame", "quality": "128k", "ext": "mp3", "label": "MP3 128kbps"},
     "flac": {"codec": "flac", "quality": "0", "ext": "flac", "label": "FLAC (Lossless)"},
-    "m4a": {"codec": "m4a", "quality": "0", "ext": "m4a", "label": "M4A (AAC)"},
+    "m4a": {"codec": "aac", "quality": "256k", "ext": "m4a", "label": "M4A (AAC)"},
 }
+
+_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
 
 def _base_opts() -> dict:
@@ -188,50 +192,86 @@ def download_track(
 ) -> Optional[Path]:
     fmt = FORMAT_OPTIONS.get(fmt_key, FORMAT_OPTIONS["mp3_320"])
     filename = sanitize_filename(f"{track.index:02d}. {track.title} - {track.artists}")
-    output_template = str(output_dir / f"{filename}.%(ext)s")
+    output_path = output_dir / f"{filename}.{fmt['ext']}"
+    temp_path = str(output_path) + ".raw"
 
     video_url = _search_and_pick(track)
     if not video_url:
         print(f"[ERROR] Track {track.index}: no YouTube match found for '{track.title}'", flush=True)
         return None
 
-    ydl_opts = _player_opts()
-    ydl_opts.update({
+    # Step 1: Extract direct stream URL via proxy (bypasses bot detection)
+    extract_opts = _player_opts()
+    extract_opts.update({
         "format": "bestaudio/best",
         "noplaylist": True,
+        "skip_download": True,
         "no_progress": True,
-        "outtmpl": output_template,
-        "postprocessors": [
-            {
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": fmt["codec"],
-                "preferredquality": fmt["quality"],
-            },
-            {
-                "key": "FFmpegMetadata",
-            },
-        ],
-        "retries": 2,
-        "fragment_retries": 2,
-        "proxy": "",
     })
 
-    if progress_hook:
-        ydl_opts["progress_hooks"] = [progress_hook]
-
+    stream_url = None
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([video_url])
+        with yt_dlp.YoutubeDL(extract_opts) as ydl:
+            info = ydl.extract_info(video_url, download=False)
+            stream_url = info.get("url")
+            if not stream_url:
+                for f in info.get("formats", []):
+                    if f.get("acodec") and f["acodec"] != "none":
+                        stream_url = f.get("url")
+                        break
     except Exception as e:
-        print(f"[ERROR] Track {track.index} download failed: {e}", flush=True)
+        print(f"[ERROR] Track {track.index} extraction failed: {e}", flush=True)
         return None
 
-    expected = output_dir / f"{filename}.{fmt['ext']}"
-    if expected.exists():
-        return expected
+    if not stream_url:
+        print(f"[ERROR] Track {track.index}: no stream URL extracted", flush=True)
+        return None
 
-    for f in output_dir.glob(f"{filename}.*"):
-        return f
+    # Step 2: Download directly from googlevideo CDN (no proxy needed, not blocked)
+    try:
+        req = urllib.request.Request(stream_url, headers={
+            "User-Agent": _UA,
+            "Referer": "https://www.youtube.com/",
+        })
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            with open(temp_path, "wb") as f:
+                while True:
+                    chunk = resp.read(65536)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+    except Exception as e:
+        print(f"[ERROR] Track {track.index} download failed: {e}", flush=True)
+        if os.path.exists(temp_path):
+            os.unlink(temp_path)
+        return None
+
+    # Step 3: Convert with FFmpeg
+    ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
+    args = [ffmpeg, "-y", "-i", temp_path, "-codec:a", fmt["codec"]]
+    if fmt["ext"] != "flac":
+        args.extend(["-b:a", fmt["quality"]])
+    args.extend([
+        "-metadata", f"title={track.title}",
+        "-metadata", f"artist={track.artists}",
+        "-metadata", f"track={track.index}",
+    ])
+    args.append(str(output_path))
+
+    try:
+        result = subprocess.run(args, capture_output=True, timeout=120)
+        if result.returncode != 0:
+            print(f"[ERROR] Track {track.index}: FFmpeg failed: {result.stderr.decode()[:200]}", flush=True)
+            return None
+    except Exception as e:
+        print(f"[ERROR] Track {track.index}: FFmpeg error: {e}", flush=True)
+        return None
+    finally:
+        if os.path.exists(temp_path):
+            os.unlink(temp_path)
+
+    if output_path.exists():
+        return output_path
     return None
 
 
