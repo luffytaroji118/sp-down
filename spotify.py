@@ -1,6 +1,7 @@
 import os
 import urllib.request
 import urllib.parse
+import urllib.error
 import base64
 import json
 import re
@@ -98,7 +99,6 @@ def _fetch_via_embed_token(playlist_id: str) -> tuple[str, list[Track]]:
 
     # If we have a token, paginate to get remaining tracks
     if token and len(tracks) > 0:
-        import urllib.error
         headers = {"Authorization": f"Bearer {token}"}
 
         # Get total track count
