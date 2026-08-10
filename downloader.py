@@ -57,6 +57,13 @@ def _load_cookies() -> Optional[str]:
     cookie_file = os.environ.get("COOKIE_FILE", "")
     local_cookie = str(Path(__file__).parent / "cookie.txt")
 
+    # Essential cookies for YouTube bot-detection bypass (avoid HTTP 413 from bloated headers)
+    essential_cookies = {
+        "VISITOR_PRIVACY_METADATA", "PREF", "YSC", "GPS", "NID", "SID", "HSID",
+        "SSID", "APISID", "SAPISID", "__Secure-1PSID", "__Secure-3PSID",
+        "__Secure-1PAPISID", "__Secure-3PAPISID", "SIDCC", "LSID", "LoginInfo",
+    }
+
     temp_path = None
 
     if cookies_b64:
@@ -79,7 +86,8 @@ def _load_cookies() -> Optional[str]:
             with open(local_cookie, "r", encoding="utf-8") as f:
                 content = f.read().strip()
             if content.startswith("["):
-                cookies_json = json.loads(content)
+                cookies_json_all = json.loads(content)
+                cookies_json = [c for c in cookies_json_all if c.get("name", "") in essential_cookies]
                 lines = ["# Netscape HTTP Cookie File", ""]
                 for c in cookies_json:
                     name = c.get("name", "")
@@ -96,7 +104,7 @@ def _load_cookies() -> Optional[str]:
                 temp_path = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, prefix="yt_cookies_")
                 temp_path.write("\n".join(lines))
                 temp_path.close()
-                print(f"[INFO] Cookies converted from JSON to Netscape format ({len(cookies_json)} cookies)", flush=True)
+                print(f"[INFO] Cookies converted: {len(cookies_json)} essential (filtered from {len(cookies_json_all)})", flush=True)
                 return temp_path.name
             else:
                 print(f"[INFO] Using local cookie file: {local_cookie}", flush=True)
