@@ -5,6 +5,7 @@ const loadBtn = $('load-btn');
 const inputError = $('input-error');
 const playlistInfo = $('playlist-info');
 const playlistName = $('playlist-name');
+const playlistNameLabel = $('playlist-name-label');
 const trackCount = $('track-count');
 const trackList = $('track-list');
 const formatSelect = $('format-select');
@@ -83,6 +84,7 @@ loadBtn.addEventListener('click', async () => {
         });
         loadedTracks = data.tracks;
         playlistName.textContent = data.name;
+        playlistNameLabel.textContent = 'Select a format and delivery method below';
         trackCount.textContent = `${data.total} tracks`;
 
         trackList.innerHTML = data.tracks.map(t => `
@@ -111,7 +113,7 @@ downloadBtn.addEventListener('click', async () => {
     if (loadedTracks.length === 0) return;
     clearError();
     downloadBtn.disabled = true;
-    downloadBtn.textContent = 'Starting...';
+    downloadBtn.textContent = 'Preparing...';
 
     try {
         const limitVal = document.getElementById('limit-input').value;
@@ -122,7 +124,7 @@ downloadBtn.addEventListener('click', async () => {
             limit: limitVal ? parseInt(limitVal) : null,
         });
         currentJobId = data.job_id;
-        downloadBtn.textContent = 'Download All';
+        downloadBtn.textContent = 'Start download';
         downloadBtn.disabled = false;
         playlistInfo.classList.add('hidden');
         progressSection.classList.remove('hidden');
@@ -131,7 +133,7 @@ downloadBtn.addEventListener('click', async () => {
     } catch (e) {
         showError(e.message);
         downloadBtn.disabled = false;
-        downloadBtn.textContent = 'Download All';
+        downloadBtn.textContent = 'Start download';
     }
 });
 
@@ -231,7 +233,7 @@ function showIndividualReady(jobId, data) {
     downloadAllIndividual.dataset.jobId = jobId;
     downloadAllIndividual.dataset.fileCount = String(files.length);
     downloadAllIndividual.disabled = false;
-    downloadAllIndividual.textContent = 'Download All';
+    downloadAllIndividual.textContent = 'Download all tracks';
 }
 
 async function downloadAllIndividualSequentially(jobId) {
@@ -260,7 +262,7 @@ async function downloadAllIndividualSequentially(jobId) {
         downloadAllIndividual.textContent = `Downloading ${done}/${rows.length}`;
         await new Promise(r => setTimeout(r, 600));
     }
-    downloadAllIndividual.textContent = 'Download All';
+    downloadAllIndividual.textContent = 'Download all tracks';
     downloadAllIndividual.disabled = false;
 }
 
@@ -284,7 +286,7 @@ backBtn.addEventListener('click', () => {
 
 function resetDownloadBtn() {
     downloadBtn.disabled = false;
-    downloadBtn.textContent = 'Download All';
+    downloadBtn.textContent = 'Start download';
 }
 
 function escapeHtml(str) {
