@@ -188,11 +188,17 @@ def _extract_and_download(
             opts["proxy"] = proxy_url
         if COOKIE_PATH:
             opts["cookiefile"] = COOKIE_PATH
-        opts["extractor_args"] = {
-            "youtube": {
-                "player_client": ["tv", "android_vr"],
+            opts["extractor_args"] = {
+                "youtube": {
+                    "player_client": ["web_safari", "tv", "android_vr"],
+                }
             }
-        }
+        else:
+            opts["extractor_args"] = {
+                "youtube": {
+                    "player_client": ["tv", "android_vr"],
+                }
+            }
         opts.update(_download_opts())
         opts.update({
             "format": f"ba[abr<={AUDIO_MAX_ABR}]/bestaudio/best",
