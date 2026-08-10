@@ -34,6 +34,7 @@ FRAGMENT_WORKERS = int(os.environ.get("FRAGMENT_WORKERS", 16))
 HTTP_CHUNK_SIZE = int(os.environ.get("HTTP_CHUNK_SIZE", 9_000_000))
 THROTTLED_RATE = int(os.environ.get("THROTTLED_RATE", 100_000))
 DIRECT_FIRST = os.environ.get("DIRECT_FIRST", "false").lower() in ("1", "true", "yes")
+POT_PROVIDER_URL = os.environ.get("POT_PROVIDER_URL", "https://po-production-93d7.up.railway.app/getPot")
 
 PROXY_RAW = os.environ.get("PROXY", "")
 PROXY_URL = ""
@@ -118,6 +119,29 @@ def _load_cookies() -> Optional[str]:
 
 COOKIE_PATH = _load_cookies()
 
+
+def _extract_video_id(url: str) -> Optional[str]:
+    m = re.search(r"(?:v=|youtu\.be/|/embed/|shorts/)([a-zA-Z0-9_-]{11})", url)
+    return m.group(1) if m else None
+
+
+def _get_pot_token(video_id: str) -> Optional[dict]:
+    """Fetch a PO token from the provider. Returns {'po_token': str} or None."""
+    try:
+        api_url = f"{POT_PROVIDER_URL}?content_binding={video_id}"
+        print(f"[INFO] Requesting PO token for {video_id}…", flush=True)
+        req = urllib.request.Request(api_url, headers={"User-Agent": _UA})
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        token = data.get("poToken")
+        if token:
+            print(f"[INFO] PO token received ({len(token)} chars)", flush=True)
+            return {"po_token": token}
+        print(f"[WARNING] PO token empty in response: {data}", flush=True)
+    except Exception as e:
+        print(f"[WARNING] PO token fetch failed: {e}", flush=True)
+    return None
+
 FORMAT_OPTIONS = {
     "mp3_320": {"codec": "mp3", "quality": "320", "ext": "mp3", "label": "MP3 320kbps"},
     "mp3_128": {"codec": "mp3", "quality": "128", "ext": "mp3", "label": "MP3 128kbps"},
@@ -168,23 +192,47 @@ def _extract_and_download(
     fmt: dict,
     progress_hook: Optional[Callable] = None,
 ) -> bool:
-    """Extract + download in a single pass. Try direct first (if enabled), fall back to proxy."""
+    """Extract + download. Direct with PO token + cookies first, proxy fallback."""
     postprocessors = [
         {"key": "FFmpegExtractAudio", "preferredcodec": fmt["codec"], "preferredquality": fmt["quality"]},
         {"key": "FFmpegMetadata"},
     ]
 
-    def _build_opts(proxy_url: str = "") -> dict:
+    def _build_direct_opts(po_token: str = "") -> dict:
+        """Direct download: web client + cookies + PO token, no proxy."""
         opts = {
             "quiet": True,
             "no_warnings": True,
             "geo_bypass": True,
             "socket_timeout": 10,
         }
-        if proxy_url:
-            opts["proxy"] = proxy_url
         if COOKIE_PATH:
             opts["cookiefile"] = COOKIE_PATH
+        extractor_args = {"youtube": {"player_client": ["web"]}}
+        if po_token:
+            extractor_args["youtube"]["po_token"] = [f"gvs:{po_token}"]
+        opts["extractor_args"] = extractor_args
+        opts.update(_download_opts())
+        opts.update({
+            "format": f"ba[abr<={AUDIO_MAX_ABR}]/bestaudio/best",
+            "noplaylist": True,
+            "no_progress": True,
+            "outtmpl": output_template,
+            "postprocessors": postprocessors,
+        })
+        if progress_hook:
+            opts["progress_hooks"] = [progress_hook]
+        return opts
+
+    def _build_proxy_opts() -> dict:
+        """Proxy download: tv/android_vr clients, no PO token needed."""
+        opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "geo_bypass": True,
+            "socket_timeout": 10,
+            "proxy": PROXY_URL,
+        }
         opts["extractor_args"] = {
             "youtube": {
                 "player_client": ["tv", "android_vr"],
@@ -202,21 +250,24 @@ def _extract_and_download(
             opts["progress_hooks"] = [progress_hook]
         return opts
 
-    # Direct-first only if explicitly enabled (cookies alone don't bypass PO Token)
-    if DIRECT_FIRST and PROXY_URL:
-        print("[INFO] Trying direct download (no proxy)…", flush=True)
-        try:
-            with yt_dlp.YoutubeDL(_build_opts()) as ydl:
-                ydl.download([video_url])
-            return True
-        except Exception as e:
-            print(f"[INFO] Direct failed ({e}), retrying with proxy…", flush=True)
-    elif not PROXY_URL:
-        print("[INFO] No proxy configured — downloading directly…", flush=True)
+    # Attempt 1: Direct download with PO token + cookies (fast, zero proxy data)
+    video_id = _extract_video_id(video_url)
+    if video_id and COOKIE_PATH and POT_PROVIDER_URL:
+        pot = _get_pot_token(video_id)
+        if pot:
+            print("[INFO] Trying direct download with PO token…", flush=True)
+            try:
+                with yt_dlp.YoutubeDL(_build_direct_opts(pot["po_token"])) as ydl:
+                    ydl.download([video_url])
+                return True
+            except Exception as e:
+                print(f"[INFO] PO token direct failed ({e}), falling back to proxy…", flush=True)
 
+    # Attempt 2: Proxy download (no PO token, tv/android_vr clients)
     if not PROXY_URL:
+        print("[INFO] No proxy configured — downloading directly…", flush=True)
         try:
-            with yt_dlp.YoutubeDL(_build_opts()) as ydl:
+            with yt_dlp.YoutubeDL(_build_direct_opts()) as ydl:
                 ydl.download([video_url])
             return True
         except Exception as e:
@@ -225,7 +276,7 @@ def _extract_and_download(
 
     try:
         print("[INFO] Downloading via proxy…", flush=True)
-        with yt_dlp.YoutubeDL(_build_opts(PROXY_URL)) as ydl:
+        with yt_dlp.YoutubeDL(_build_proxy_opts()) as ydl:
             ydl.download([video_url])
         return True
     except Exception as e:
