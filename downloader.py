@@ -208,7 +208,7 @@ def _extract_and_download(
         }
         if COOKIE_PATH:
             opts["cookiefile"] = COOKIE_PATH
-        extractor_args = {"youtube": {"player_client": ["mweb"]}}
+        extractor_args = {"youtube": {"player_client": ["web"]}}
         if po_token:
             extractor_args["youtube"]["po_token"] = [f"gvs:{po_token}"]
         opts["extractor_args"] = extractor_args
