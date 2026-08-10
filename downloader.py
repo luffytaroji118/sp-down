@@ -25,6 +25,9 @@ else:
         print("[WARNING] FFmpeg not found! Downloads will fail.", flush=True)
 
 MAX_WORKERS = int(os.environ.get("MAX_WORKERS", 24))
+AUDIO_MAX_ABR = os.environ.get("AUDIO_MAX_ABR", "160")
+FRAGMENT_WORKERS = int(os.environ.get("FRAGMENT_WORKERS", 16))
+DOWNLOAD_CHUNK_SIZE = int(os.environ.get("DOWNLOAD_CHUNK_SIZE", 10 * 1024 * 1024))
 
 PROXY_RAW = os.environ.get("PROXY", "")
 PROXY_URL = ""
@@ -200,11 +203,11 @@ def download_track(
 
     ydl_opts = _player_opts()
     ydl_opts.update({
-        "format": "ba[abr<=160]/bestaudio/best",
+        "format": f"ba[abr<={AUDIO_MAX_ABR}]/bestaudio/best",
         "noplaylist": True,
         "no_progress": True,
         "outtmpl": output_template,
-        "concurrent_fragment_downloads": 8,
+        "concurrent_fragment_downloads": FRAGMENT_WORKERS,
         "postprocessors": [
             {
                 "key": "FFmpegExtractAudio",
@@ -215,9 +218,11 @@ def download_track(
                 "key": "FFmpegMetadata",
             },
         ],
-        "retries": 3,
-        "fragment_retries": 3,
-        "http_chunk_size": 1048576,
+        "retries": 5,
+        "fragment_retries": 5,
+        "file_access_retries": 5,
+        "http_chunk_size": DOWNLOAD_CHUNK_SIZE,
+        "buffersize": 1024 * 1024,
     })
 
     if progress_hook:
@@ -255,11 +260,11 @@ def download_track_by_url(
 
     ydl_opts = _player_opts()
     ydl_opts.update({
-        "format": "ba[abr<=160]/bestaudio/best",
+        "format": f"ba[abr<={AUDIO_MAX_ABR}]/bestaudio/best",
         "noplaylist": True,
         "no_progress": True,
         "outtmpl": output_template,
-        "concurrent_fragment_downloads": 8,
+        "concurrent_fragment_downloads": FRAGMENT_WORKERS,
         "postprocessors": [
             {
                 "key": "FFmpegExtractAudio",
@@ -270,9 +275,11 @@ def download_track_by_url(
                 "key": "FFmpegMetadata",
             },
         ],
-        "retries": 3,
-        "fragment_retries": 3,
-        "http_chunk_size": 1048576,
+        "retries": 5,
+        "fragment_retries": 5,
+        "file_access_retries": 5,
+        "http_chunk_size": DOWNLOAD_CHUNK_SIZE,
+        "buffersize": 1024 * 1024,
     })
 
     if progress_hook:

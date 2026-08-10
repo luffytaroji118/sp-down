@@ -43,6 +43,9 @@ Alternatively, set `COOKIE_FILE` to a path where a cookies.txt file exists in th
 | `MAX_WORKERS` | `8` | Number of parallel downloads |
 | `COOKIE_FILE` | _(empty)_ | Path to cookies.txt file |
 | `COOKIES_B64` | _(empty)_ | Base64-encoded cookies.txt content |
+| `FRAGMENT_WORKERS` | `16` | Parallel media fragment connections per song |
+| `DOWNLOAD_CHUNK_SIZE` | `10485760` | HTTP range chunk size in bytes |
+| `AUDIO_MAX_ABR` | `160` | Maximum source audio bitrate downloaded before conversion |
 
 ## Local development
 
