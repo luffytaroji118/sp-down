@@ -114,7 +114,6 @@ def _extract_and_download(
         opts["extractor_args"] = {
             "youtube": {
                 "player_client": ["tv"],
-                "player_skip": ["webpage", "configs"],
             }
         }
         opts.update(_download_opts())
