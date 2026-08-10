@@ -247,6 +247,7 @@ def download_playlist(
     on_track_done: Callable[[int, Track, Optional[Path]], None] = lambda i, t, p: None,
     stop_event: Optional[threading.Event] = None,
     max_workers: int = MAX_WORKERS,
+    pack_zip: bool = True,
 ) -> Optional[Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -274,6 +275,9 @@ def download_playlist(
 
     if stop_event and stop_event.is_set():
         return None
+
+    if not pack_zip:
+        return output_dir
 
     zip_path = output_dir.parent / f"{output_dir.name}.zip"
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:

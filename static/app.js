@@ -16,6 +16,11 @@ const currentTrack = $('current-track');
 const downloadReady = $('download-ready');
 const downloadLink = $('download-link');
 const summaryText = $('summary-text');
+const modeSelect = $('mode-select');
+const individualReady = $('individual-ready');
+const individualFileList = $('individual-file-list');
+const individualSummaryText = $('individual-summary-text');
+const downloadAllIndividual = $('download-all-individual');
 const spinner = $('loading-spinner');
 const stopBtn = $('stop-btn');
 const stoppedSection = $('stopped-section');
@@ -113,6 +118,7 @@ downloadBtn.addEventListener('click', async () => {
         const data = await api('/api/download', {
             url: urlInput.value.trim(),
             format: formatSelect.value,
+            mode: modeSelect.value,
             limit: limitVal ? parseInt(limitVal) : null,
         });
         currentJobId = data.job_id;
@@ -152,7 +158,11 @@ function pollStatus(jobId) {
             updateProgress(data);
             if (data.status === 'done') {
                 clearInterval(pollTimer);
-                showDownloadReady(jobId, data);
+                if (data.mode === 'individual') {
+                    showIndividualReady(jobId, data);
+                } else {
+                    showDownloadReady(jobId, data);
+                }
             } else if (data.status === 'error') {
                 clearInterval(pollTimer);
                 showError(data.error || 'Download failed');
@@ -203,6 +213,61 @@ function showDownloadReady(jobId, data) {
     downloadLink.href = `/api/file/${jobId}`;
     summaryText.textContent = `${data.completed} songs downloaded${data.failed > 0 ? `, ${data.failed} failed` : ''}`;
 }
+
+function showIndividualReady(jobId, data) {
+    progressSection.classList.add('hidden');
+    individualReady.classList.remove('hidden');
+    individualSummaryText.textContent = `${data.completed} songs downloaded${data.failed > 0 ? `, ${data.failed} failed` : ''}`;
+
+    const files = (data.files || []).slice().sort((a, b) => a.index - b.index);
+    individualFileList.innerHTML = files.map(f => `
+        <a class="individual-file-row" href="/api/track_file/${jobId}/${f.index}" download>
+            <span class="status-icon status-done">&#10003;</span>
+            <span class="individual-file-name">${escapeHtml(f.name)}</span>
+            <span class="individual-download-icon">&darr;</span>
+        </a>
+    `).join('');
+
+    downloadAllIndividual.dataset.jobId = jobId;
+    downloadAllIndividual.dataset.fileCount = String(files.length);
+    downloadAllIndividual.disabled = false;
+    downloadAllIndividual.textContent = 'Download All';
+}
+
+async function downloadAllIndividualSequentially(jobId) {
+    const rows = individualFileList.querySelectorAll('a.individual-file-row');
+    if (!rows.length) return;
+    downloadAllIndividual.disabled = true;
+    let done = 0;
+    for (const row of rows) {
+        const href = row.getAttribute('href');
+        try {
+            const resp = await fetch(href);
+            if (!resp.ok) throw new Error('failed');
+            const blob = await resp.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = row.querySelector('.individual-file-name').textContent;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        } catch (e) {
+            row.classList.add('failed-row');
+        }
+        done++;
+        downloadAllIndividual.textContent = `Downloading ${done}/${rows.length}`;
+        await new Promise(r => setTimeout(r, 600));
+    }
+    downloadAllIndividual.textContent = 'Download All';
+    downloadAllIndividual.disabled = false;
+}
+
+downloadAllIndividual.addEventListener('click', () => {
+    const jobId = downloadAllIndividual.dataset.jobId;
+    if (jobId) downloadAllIndividualSequentially(jobId);
+});
 
 function showStopped(data) {
     progressSection.classList.add('hidden');

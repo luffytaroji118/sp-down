@@ -40,6 +40,10 @@
                         <option value="{{ fmt.key }}">{{ fmt.label }}</option>
                         {% endfor %}
                     </select>
+                    <select id="mode-select" class="select" title="How to download">
+                        <option value="zip">As ZIP file</option>
+                        <option value="individual">Separate files</option>
+                    </select>
                     <input type="number" id="limit-input" class="limit-input" min="1" placeholder="All" title="Max tracks to download">
                     <button id="download-btn" class="btn btn-green">Download All</button>
                 </div>
@@ -72,6 +76,22 @@
                 </div>
             </div>
             <a id="download-link" class="btn btn-green btn-large" href="#">Download ZIP</a>
+        </div>
+
+        <div id="individual-ready" class="card hidden">
+            <div class="ready-header">
+                <svg viewBox="0 0 24 24" width="48" height="48" fill="#1DB954">
+                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                </svg>
+                <div>
+                    <h3>Downloads Ready!</h3>
+                    <p id="individual-summary-text"></p>
+                </div>
+            </div>
+            <div class="individual-toolbar">
+                <button id="download-all-individual" class="btn btn-primary">Download All</button>
+            </div>
+            <div id="individual-file-list" class="individual-file-list"></div>
         </div>
 
         <div id="stopped-section" class="card hidden">

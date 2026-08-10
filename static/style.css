@@ -355,6 +355,76 @@ input[type="text"]:focus {
     text-align: center;
 }
 
+#individual-ready {
+    text-align: left;
+}
+
+#individual-ready .ready-header {
+    justify-content: flex-start;
+}
+
+.individual-toolbar {
+    display: flex;
+    justify-content: center;
+    margin-top: 12px;
+    margin-bottom: 8px;
+}
+
+.individual-file-list {
+    max-height: 400px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 8px;
+}
+
+.individual-file-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.individual-file-list::-webkit-scrollbar-thumb {
+    background: #444;
+    border-radius: 3px;
+}
+
+.individual-file-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--text);
+    text-decoration: none;
+    transition: background var(--transition);
+    cursor: pointer;
+}
+
+.individual-file-row:hover {
+    background: var(--card-hover);
+}
+
+.individual-file-row .individual-file-name {
+    flex: 1;
+    min-width: 0;
+    font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.individual-download-icon {
+    color: var(--accent);
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.individual-file-row.failed-row {
+    opacity: 0.5;
+    cursor: default;
+}
+
 .spinner {
     width: 40px;
     height: 40px;

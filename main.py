@@ -60,11 +60,14 @@ async def get_playlist(data: dict):
 async def start_download(data: dict):
     url = data.get("url", "").strip()
     fmt_key = data.get("format", "mp3_320")
+    mode = data.get("mode", "zip")
     limit = data.get("limit")
     if not url:
         raise HTTPException(400, "URL is required")
     if fmt_key not in FORMAT_OPTIONS:
         raise HTTPException(400, f"Invalid format: {fmt_key}")
+    if mode not in ("zip", "individual"):
+        raise HTTPException(400, "Invalid mode")
 
     try:
         playlist_name, tracks = await asyncio.to_thread(fetch_tracks, url)
@@ -86,6 +89,7 @@ async def start_download(data: dict):
 
     jobs[job_id] = {
         "status": "downloading",
+        "mode": mode,
         "playlist_name": playlist_name,
         "total": len(tracks),
         "completed": 0,
@@ -94,17 +98,19 @@ async def start_download(data: dict):
         "current_title": "",
         "current_titles": [],
         "track_status": [None] * len(tracks),
+        "files": [],
         "zip_path": None,
+        "song_dir": None,
         "error": None,
         "created_at": time.time(),
         "stop_event": stop_event,
     }
 
-    asyncio.create_task(_run_download(job_id, tracks, song_dir, fmt_key, stop_event))
+    asyncio.create_task(_run_download(job_id, tracks, song_dir, fmt_key, stop_event, pack_zip=(mode == "zip")))
     return {"job_id": job_id, "total": len(tracks)}
 
 
-async def _run_download(job_id, tracks, song_dir, fmt_key, stop_event):
+async def _run_download(job_id, tracks, song_dir, fmt_key, stop_event, pack_zip=True):
     job = jobs[job_id]
 
     def on_start(idx, track):
@@ -114,18 +120,22 @@ async def _run_download(job_id, tracks, song_dir, fmt_key, stop_event):
         if path:
             job["track_status"][idx - 1] = "done"
             job["completed"] += 1
+            job["files"].append({"index": idx, "name": Path(path).name, "path": str(path)})
         else:
             job["track_status"][idx - 1] = "failed"
             job["failed"] += 1
 
     try:
         loop = asyncio.get_event_loop()
-        zip_path = await loop.run_in_executor(
+        result_path = await loop.run_in_executor(
             None,
-            lambda: download_playlist(tracks, song_dir, fmt_key, on_start, on_done, stop_event),
+            lambda: download_playlist(tracks, song_dir, fmt_key, on_start, on_done, stop_event, pack_zip=pack_zip),
         )
-        if zip_path:
-            job["zip_path"] = str(zip_path)
+        if result_path:
+            if pack_zip:
+                job["zip_path"] = str(result_path)
+            else:
+                job["song_dir"] = str(result_path)
             job["status"] = "done"
         else:
             job["status"] = "stopped"
@@ -147,6 +157,7 @@ async def get_status(job_id: str):
 
     return JSONResponse({
         "status": job["status"],
+        "mode": job["mode"],
         "playlist_name": job["playlist_name"],
         "total": job["total"],
         "completed": job["completed"],
@@ -155,6 +166,7 @@ async def get_status(job_id: str):
         "current_title": job["current_title"],
         "current_downloading": current_titles,
         "track_status": job["track_status"],
+        "files": [{"index": f["index"], "name": f["name"]} for f in job["files"]],
         "error": job["error"],
     })
 
@@ -188,6 +200,24 @@ async def download_file(job_id: str):
     )
 
 
+@app.get("/api/track_file/{job_id}/{track_index}")
+async def download_track_file(job_id: str, track_index: int):
+    job = jobs.get(job_id)
+    if not job:
+        raise HTTPException(404, "Job not found")
+    if job["status"] != "done":
+        raise HTTPException(400, "Download not ready")
+    if job["mode"] != "individual":
+        raise HTTPException(400, "Job is not in individual mode")
+    file_info = next((f for f in job["files"] if f["index"] == track_index), None)
+    if not file_info:
+        raise HTTPException(404, "Track file not found")
+    path = Path(file_info["path"])
+    if not path.exists():
+        raise HTTPException(404, "File not found")
+    return FileResponse(str(path), filename=file_info["name"])
+
+
 @app.on_event("startup")
 async def cleanup_loop():
     async def _cleanup():
@@ -200,13 +230,21 @@ async def cleanup_loop():
             ]
             for jid in to_remove:
                 job = jobs.pop(jid, None)
-                if job and job.get("zip_path"):
-                    p = Path(job["zip_path"])
-                    if p.exists():
-                        p.unlink(missing_ok=True)
-                    parent = p.parent
-                    if parent != TEMP_DIR:
-                        shutil.rmtree(parent, ignore_errors=True)
+                if job:
+                    if job.get("zip_path"):
+                        p = Path(job["zip_path"])
+                        if p.exists():
+                            p.unlink(missing_ok=True)
+                        parent = p.parent
+                        if parent != TEMP_DIR:
+                            shutil.rmtree(parent, ignore_errors=True)
+                    if job.get("song_dir"):
+                        p = Path(job["song_dir"])
+                        if p.exists():
+                            shutil.rmtree(p, ignore_errors=True)
+                        parent = p.parent
+                        if parent != TEMP_DIR:
+                            shutil.rmtree(parent, ignore_errors=True)
 
     asyncio.create_task(_cleanup())
 
