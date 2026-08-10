@@ -113,7 +113,7 @@ def _extract_and_download(
             opts["proxy"] = proxy_url
         opts["extractor_args"] = {
             "youtube": {
-                "player_client": ["tv"],
+                "player_client": ["tv", "android_vr"],
             }
         }
         opts.update(_download_opts())
