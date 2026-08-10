@@ -89,6 +89,90 @@ def _download_opts() -> dict:
     }
 
 
+def _no_proxy_opts() -> dict:
+    """Options for direct media download — NO proxy, saves proxy bandwidth."""
+    return {
+        "quiet": True,
+        "no_warnings": True,
+        "geo_bypass": True,
+        "socket_timeout": 15,
+    }
+
+
+def _extract_and_download(
+    video_url: str,
+    output_template: str,
+    fmt: dict,
+    progress_hook: Optional[Callable] = None,
+) -> bool:
+    """Extract format info with proxy (small data), download media without proxy (large data)."""
+    postprocessors = [
+        {"key": "FFmpegExtractAudio", "preferredcodec": fmt["codec"], "preferredquality": fmt["quality"]},
+        {"key": "FFmpegMetadata"},
+    ]
+
+    # Phase 1: Extract format info WITH proxy (small: ~50-200KB)
+    extract_opts = _player_opts()
+    extract_opts.update({
+        "format": f"ba[abr<={AUDIO_MAX_ABR}]/bestaudio/best",
+        "noplaylist": True,
+        "no_progress": True,
+    })
+    try:
+        with yt_dlp.YoutubeDL(extract_opts) as ydl:
+            info = ydl.extract_info(video_url, download=False)
+    except Exception as e:
+        print(f"[ERROR] Extraction failed: {e}", flush=True)
+        return False
+
+    if not info:
+        print("[ERROR] No info extracted", flush=True)
+        return False
+
+    # Phase 2: Download media WITHOUT proxy (large: several MB, saves proxy data)
+    download_opts = _no_proxy_opts()
+    download_opts.update(_download_opts())
+    download_opts.update({
+        "format": f"ba[abr<={AUDIO_MAX_ABR}]/bestaudio/best",
+        "noplaylist": True,
+        "no_progress": True,
+        "outtmpl": output_template,
+        "postprocessors": postprocessors,
+    })
+    if progress_hook:
+        download_opts["progress_hooks"] = [progress_hook]
+
+    try:
+        print("[INFO] Downloading media directly (no proxy)…", flush=True)
+        with yt_dlp.YoutubeDL(download_opts) as ydl:
+            ydl.process_ie_result(info, download=True)
+        return True
+    except Exception as e:
+        print(f"[ERROR] Direct download failed: {e}", flush=True)
+
+        # Fallback: download with proxy (in case googlevideo URL is IP-bound)
+        if PROXY_URL:
+            print("[INFO] Falling back to proxy download…", flush=True)
+            fallback_opts = _player_opts()
+            fallback_opts.update(_download_opts())
+            fallback_opts.update({
+                "format": f"ba[abr<={AUDIO_MAX_ABR}]/bestaudio/best",
+                "noplaylist": True,
+                "no_progress": True,
+                "outtmpl": output_template,
+                "postprocessors": postprocessors,
+            })
+            if progress_hook:
+                fallback_opts["progress_hooks"] = [progress_hook]
+            try:
+                with yt_dlp.YoutubeDL(fallback_opts) as ydl:
+                    ydl.process_ie_result(info, download=True)
+                return True
+            except Exception as e2:
+                print(f"[ERROR] Proxy download also failed: {e2}", flush=True)
+        return False
+
+
 def sanitize_filename(name: str) -> str:
     name = re.sub(r'[<>:"/\\|?*]', "_", name)
     name = re.sub(r"\s+", " ", name).strip()
@@ -214,39 +298,13 @@ def download_track(
         print(f"[ERROR] Track {track.index}: no YouTube match found for '{track.title}'", flush=True)
         return None
 
-    ydl_opts = _player_opts()
-    ydl_opts.update(_download_opts())
-    ydl_opts.update({
-        "format": f"ba[abr<={AUDIO_MAX_ABR}]/bestaudio/best",
-        "noplaylist": True,
-        "no_progress": True,
-        "outtmpl": output_template,
-        "postprocessors": [
-            {
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": fmt["codec"],
-                "preferredquality": fmt["quality"],
-            },
-            {
-                "key": "FFmpegMetadata",
-            },
-        ],
-    })
-
-    if progress_hook:
-        ydl_opts["progress_hooks"] = [progress_hook]
-
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([video_url])
-    except Exception as e:
-        print(f"[ERROR] Track {track.index} download failed: {e}", flush=True)
+    success = _extract_and_download(video_url, output_template, fmt, progress_hook)
+    if not success:
         return None
 
     expected = output_dir / f"{filename}.{fmt['ext']}"
     if expected.exists():
         return expected
-
     for f in output_dir.glob(f"{filename}.*"):
         return f
     return None
@@ -266,33 +324,8 @@ def download_track_by_url(
     filename = sanitize_filename(f"{index:02d}. {title} - {artists}")
     output_template = str(output_dir / f"{filename}.%(ext)s")
 
-    ydl_opts = _player_opts()
-    ydl_opts.update(_download_opts())
-    ydl_opts.update({
-        "format": f"ba[abr<={AUDIO_MAX_ABR}]/bestaudio/best",
-        "noplaylist": True,
-        "no_progress": True,
-        "outtmpl": output_template,
-        "postprocessors": [
-            {
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": fmt["codec"],
-                "preferredquality": fmt["quality"],
-            },
-            {
-                "key": "FFmpegMetadata",
-            },
-        ],
-    })
-
-    if progress_hook:
-        ydl_opts["progress_hooks"] = [progress_hook]
-
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([video_url])
-    except Exception as e:
-        print(f"[ERROR] direct download failed: {e}", flush=True)
+    success = _extract_and_download(video_url, output_template, fmt, progress_hook)
+    if not success:
         return None
 
     expected = output_dir / f"{filename}.{fmt['ext']}"
