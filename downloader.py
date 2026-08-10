@@ -117,9 +117,6 @@ def _load_cookies() -> Optional[str]:
 
 
 COOKIE_PATH = _load_cookies()
-if COOKIE_PATH:
-    DIRECT_FIRST = True
-    print("[INFO] Cookies available — direct download enabled", flush=True)
 
 FORMAT_OPTIONS = {
     "mp3_320": {"codec": "mp3", "quality": "320", "ext": "mp3", "label": "MP3 320kbps"},
@@ -188,17 +185,11 @@ def _extract_and_download(
             opts["proxy"] = proxy_url
         if COOKIE_PATH:
             opts["cookiefile"] = COOKIE_PATH
-            opts["extractor_args"] = {
-                "youtube": {
-                    "player_client": ["web", "web_safari"],
-                }
+        opts["extractor_args"] = {
+            "youtube": {
+                "player_client": ["tv", "android_vr"],
             }
-        else:
-            opts["extractor_args"] = {
-                "youtube": {
-                    "player_client": ["tv", "android_vr"],
-                }
-            }
+        }
         opts.update(_download_opts())
         opts.update({
             "format": f"ba[abr<={AUDIO_MAX_ABR}]/bestaudio/best",
@@ -211,7 +202,7 @@ def _extract_and_download(
             opts["progress_hooks"] = [progress_hook]
         return opts
 
-    # Attempt 1: Entire flow WITHOUT proxy (fast, zero proxy data)
+    # Direct-first only if explicitly enabled (cookies alone don't bypass PO Token)
     if DIRECT_FIRST and PROXY_URL:
         print("[INFO] Trying direct download (no proxy)…", flush=True)
         try:
@@ -223,7 +214,6 @@ def _extract_and_download(
     elif not PROXY_URL:
         print("[INFO] No proxy configured — downloading directly…", flush=True)
 
-    # Attempt 2 (or 1 if DIRECT_FIRST is off): Entire flow WITH proxy
     if not PROXY_URL:
         try:
             with yt_dlp.YoutubeDL(_build_opts()) as ydl:
