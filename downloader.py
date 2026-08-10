@@ -190,7 +190,7 @@ def _extract_and_download(
             opts["cookiefile"] = COOKIE_PATH
             opts["extractor_args"] = {
                 "youtube": {
-                    "player_client": ["web_safari", "tv", "android_vr"],
+                    "player_client": ["web", "web_safari"],
                 }
             }
         else:
