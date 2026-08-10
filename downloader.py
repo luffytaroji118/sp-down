@@ -29,6 +29,7 @@ AUDIO_MAX_ABR = os.environ.get("AUDIO_MAX_ABR", "160")
 FRAGMENT_WORKERS = int(os.environ.get("FRAGMENT_WORKERS", 16))
 HTTP_CHUNK_SIZE = int(os.environ.get("HTTP_CHUNK_SIZE", 9_000_000))
 THROTTLED_RATE = int(os.environ.get("THROTTLED_RATE", 100_000))
+DIRECT_FIRST = os.environ.get("DIRECT_FIRST", "false").lower() in ("1", "true", "yes")
 
 PROXY_RAW = os.environ.get("PROXY", "")
 PROXY_URL = ""
@@ -95,17 +96,24 @@ def _extract_and_download(
     fmt: dict,
     progress_hook: Optional[Callable] = None,
 ) -> bool:
-    """Extract + download in a single pass. Try direct first (saves proxy), fall back to proxy."""
+    """Extract + download in a single pass. Try direct first (if enabled), fall back to proxy."""
     postprocessors = [
         {"key": "FFmpegExtractAudio", "preferredcodec": fmt["codec"], "preferredquality": fmt["quality"]},
         {"key": "FFmpegMetadata"},
     ]
 
-    def _build_opts(base_opts: dict) -> dict:
-        opts = base_opts
+    def _build_opts(proxy_url: str = "") -> dict:
+        opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "geo_bypass": True,
+            "socket_timeout": 15,
+        }
+        if proxy_url:
+            opts["proxy"] = proxy_url
         opts["extractor_args"] = {
             "youtube": {
-                "player_client": ["tv", "tv_downgraded", "android_vr", "visionos", "web_safari"],
+                "player_client": ["tv", "android_vr"],
             }
         }
         opts.update(_download_opts())
@@ -121,40 +129,34 @@ def _extract_and_download(
         return opts
 
     # Attempt 1: Entire flow WITHOUT proxy (fast, zero proxy data)
-    if not PROXY_URL:
-        print("[INFO] No proxy configured — downloading directly…", flush=True)
-    else:
+    if DIRECT_FIRST and PROXY_URL:
         print("[INFO] Trying direct download (no proxy)…", flush=True)
-    try:
-        direct_opts = _build_opts({
-            "quiet": True,
-            "no_warnings": True,
-            "geo_bypass": True,
-            "socket_timeout": 15,
-        })
-        with yt_dlp.YoutubeDL(direct_opts) as ydl:
-            ydl.download([video_url])
-        return True
-    except Exception as e:
-        if not PROXY_URL:
+        try:
+            with yt_dlp.YoutubeDL(_build_opts()) as ydl:
+                ydl.download([video_url])
+            return True
+        except Exception as e:
+            print(f"[INFO] Direct failed ({e}), retrying with proxy…", flush=True)
+    elif not PROXY_URL:
+        print("[INFO] No proxy configured — downloading directly…", flush=True)
+
+    # Attempt 2 (or 1 if DIRECT_FIRST is off): Entire flow WITH proxy
+    if not PROXY_URL:
+        try:
+            with yt_dlp.YoutubeDL(_build_opts()) as ydl:
+                ydl.download([video_url])
+            return True
+        except Exception as e:
             print(f"[ERROR] Download failed: {e}", flush=True)
             return False
-        print(f"[INFO] Direct failed ({e}), retrying with proxy…", flush=True)
 
-    # Attempt 2: Entire flow WITH proxy (fallback)
     try:
-        proxy_opts = _build_opts({
-            "quiet": True,
-            "no_warnings": True,
-            "geo_bypass": True,
-            "socket_timeout": 15,
-            "proxy": PROXY_URL,
-        })
-        with yt_dlp.YoutubeDL(proxy_opts) as ydl:
+        print("[INFO] Downloading via proxy…", flush=True)
+        with yt_dlp.YoutubeDL(_build_opts(PROXY_URL)) as ydl:
             ydl.download([video_url])
         return True
     except Exception as e:
-        print(f"[ERROR] Proxy download also failed: {e}", flush=True)
+        print(f"[ERROR] Proxy download failed: {e}", flush=True)
         return False
 
 
