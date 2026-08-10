@@ -27,6 +27,8 @@ else:
 MAX_WORKERS = int(os.environ.get("MAX_WORKERS", 24))
 AUDIO_MAX_ABR = os.environ.get("AUDIO_MAX_ABR", "160")
 FRAGMENT_WORKERS = int(os.environ.get("FRAGMENT_WORKERS", 16))
+HTTP_CHUNK_SIZE = int(os.environ.get("HTTP_CHUNK_SIZE", 9_000_000))
+THROTTLED_RATE = int(os.environ.get("THROTTLED_RATE", 100_000))
 
 PROXY_RAW = os.environ.get("PROXY", "")
 PROXY_URL = ""
@@ -69,10 +71,22 @@ def _player_opts() -> dict:
     opts = _base_opts()
     opts["extractor_args"] = {
         "youtube": {
-            "player_client": ["ios", "android", "web"],
+            "player_client": ["tv", "tv_downgraded", "android_vr", "visionos", "web_safari"],
         }
     }
     return opts
+
+
+def _download_opts() -> dict:
+    return {
+        "http_chunk_size": HTTP_CHUNK_SIZE,
+        "throttled_rate": THROTTLED_RATE,
+        "concurrent_fragment_downloads": FRAGMENT_WORKERS,
+        "buffersize": 1024 * 1024,
+        "retries": 5,
+        "fragment_retries": 5,
+        "file_access_retries": 5,
+    }
 
 
 def sanitize_filename(name: str) -> str:
@@ -201,12 +215,12 @@ def download_track(
         return None
 
     ydl_opts = _player_opts()
+    ydl_opts.update(_download_opts())
     ydl_opts.update({
         "format": f"ba[abr<={AUDIO_MAX_ABR}]/bestaudio/best",
         "noplaylist": True,
         "no_progress": True,
         "outtmpl": output_template,
-        "concurrent_fragment_downloads": FRAGMENT_WORKERS,
         "postprocessors": [
             {
                 "key": "FFmpegExtractAudio",
@@ -217,10 +231,6 @@ def download_track(
                 "key": "FFmpegMetadata",
             },
         ],
-        "retries": 5,
-        "fragment_retries": 5,
-        "file_access_retries": 5,
-        "buffersize": 1024 * 1024,
     })
 
     if progress_hook:
@@ -257,12 +267,12 @@ def download_track_by_url(
     output_template = str(output_dir / f"{filename}.%(ext)s")
 
     ydl_opts = _player_opts()
+    ydl_opts.update(_download_opts())
     ydl_opts.update({
         "format": f"ba[abr<={AUDIO_MAX_ABR}]/bestaudio/best",
         "noplaylist": True,
         "no_progress": True,
         "outtmpl": output_template,
-        "concurrent_fragment_downloads": FRAGMENT_WORKERS,
         "postprocessors": [
             {
                 "key": "FFmpegExtractAudio",
@@ -273,10 +283,6 @@ def download_track_by_url(
                 "key": "FFmpegMetadata",
             },
         ],
-        "retries": 5,
-        "fragment_retries": 5,
-        "file_access_retries": 5,
-        "buffersize": 1024 * 1024,
     })
 
     if progress_hook:

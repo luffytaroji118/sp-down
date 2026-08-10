@@ -40,11 +40,12 @@ Alternatively, set `COOKIE_FILE` to a path where a cookies.txt file exists in th
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | `8000` | Server port (set by Railway automatically) |
-| `MAX_WORKERS` | `8` | Number of parallel downloads |
+| `MAX_WORKERS` | `24` | Number of parallel downloads |
 | `COOKIE_FILE` | _(empty)_ | Path to cookies.txt file |
 | `COOKIES_B64` | _(empty)_ | Base64-encoded cookies.txt content |
 | `FRAGMENT_WORKERS` | `16` | Parallel media fragment connections per song |
-| `DOWNLOAD_CHUNK_SIZE` | `10485760` | HTTP range chunk size in bytes |
+| `HTTP_CHUNK_SIZE` | `9000000` | HTTP range chunk size (under 10MB to bypass YouTube throttle) |
+| `THROTTLED_RATE` | `100000` | Re-extract URL if speed drops below this (bytes/sec) |
 | `AUDIO_MAX_ABR` | `160` | Maximum source audio bitrate downloaded before conversion |
 
 ## Local development
