@@ -107,13 +107,14 @@ def _extract_and_download(
             "quiet": True,
             "no_warnings": True,
             "geo_bypass": True,
-            "socket_timeout": 15,
+            "socket_timeout": 10,
         }
         if proxy_url:
             opts["proxy"] = proxy_url
         opts["extractor_args"] = {
             "youtube": {
-                "player_client": ["tv", "android_vr"],
+                "player_client": ["tv"],
+                "player_skip": ["webpage", "configs"],
             }
         }
         opts.update(_download_opts())
@@ -196,12 +197,16 @@ def _search_and_pick(track: Track) -> Optional[str]:
 
     for query in queries:
         try:
-            search_opts = _player_opts()
-            search_opts.update({
+            search_opts = {
+                "quiet": True,
+                "no_warnings": True,
+                "geo_bypass": True,
+                "socket_timeout": 10,
+                "extractor_args": {"youtube": {"player_client": ["tv"]}},
                 "skip_download": True,
                 "extract_flat": True,
                 "default_search": "ytsearch2",
-            })
+            }
             with yt_dlp.YoutubeDL(search_opts) as ydl:
                 info = ydl.extract_info(f"ytsearch2:{query}", download=False)
 
@@ -324,12 +329,16 @@ def download_track_by_url(
 
 
 def search_youtube(query: str, limit: int = 10) -> list[dict]:
-    search_opts = _player_opts()
-    search_opts.update({
+    search_opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "geo_bypass": True,
+        "socket_timeout": 10,
+        "extractor_args": {"youtube": {"player_client": ["tv"]}},
         "skip_download": True,
         "extract_flat": True,
         "default_search": f"ytsearch{limit}",
-    })
+    }
     try:
         with yt_dlp.YoutubeDL(search_opts) as ydl:
             info = ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
