@@ -3,6 +3,10 @@ import re
 import shutil
 import subprocess
 import threading
+import time
+import json
+import base64
+import tempfile
 import urllib.request
 import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -45,6 +49,69 @@ if PROXY_RAW:
     print(f"[INFO] Proxy configured: {PROXY_URL.split('@')[-1] if '@' in PROXY_URL else PROXY_URL}", flush=True)
 else:
     print("[WARNING] No proxy configured. YouTube bot detection may block downloads.", flush=True)
+
+
+def _load_cookies() -> Optional[str]:
+    """Load cookies from COOKIES_B64, COOKIE_FILE, or local cookie.txt. Returns path to Netscape cookies file."""
+    cookies_b64 = os.environ.get("COOKIES_B64", "")
+    cookie_file = os.environ.get("COOKIE_FILE", "")
+    local_cookie = str(Path(__file__).parent / "cookie.txt")
+
+    temp_path = None
+
+    if cookies_b64:
+        try:
+            content = base64.b64decode(cookies_b64).decode("utf-8")
+            temp_path = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, prefix="yt_cookies_")
+            temp_path.write(content)
+            temp_path.close()
+            print(f"[INFO] Cookies loaded from COOKIES_B64", flush=True)
+            return temp_path.name
+        except Exception as e:
+            print(f"[WARNING] Failed to decode COOKIES_B64: {e}", flush=True)
+
+    if cookie_file and os.path.exists(cookie_file):
+        print(f"[INFO] Using cookie file: {cookie_file}", flush=True)
+        return cookie_file
+
+    if os.path.exists(local_cookie):
+        try:
+            with open(local_cookie, "r", encoding="utf-8") as f:
+                content = f.read().strip()
+            if content.startswith("["):
+                cookies_json = json.loads(content)
+                lines = ["# Netscape HTTP Cookie File", ""]
+                for c in cookies_json:
+                    name = c.get("name", "")
+                    value = c.get("value", "")
+                    path = c.get("path", "/")
+                    secure = "TRUE" if c.get("secure", True) else "FALSE"
+                    expires = c.get("expires", -1)
+                    if expires == -1 or expires is None:
+                        expiry = int(time.time()) + 86400 * 365
+                    else:
+                        expiry = int(expires)
+                    host = c.get("domain", ".youtube.com")
+                    lines.append(f"{host}\tTRUE\t{path}\t{secure}\t{expiry}\t{name}\t{value}")
+                temp_path = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, prefix="yt_cookies_")
+                temp_path.write("\n".join(lines))
+                temp_path.close()
+                print(f"[INFO] Cookies converted from JSON to Netscape format ({len(cookies_json)} cookies)", flush=True)
+                return temp_path.name
+            else:
+                print(f"[INFO] Using local cookie file: {local_cookie}", flush=True)
+                return local_cookie
+        except Exception as e:
+            print(f"[WARNING] Failed to load local cookie.txt: {e}", flush=True)
+
+    print("[INFO] No cookies configured", flush=True)
+    return None
+
+
+COOKIE_PATH = _load_cookies()
+if COOKIE_PATH:
+    DIRECT_FIRST = True
+    print("[INFO] Cookies available — direct download enabled", flush=True)
 
 FORMAT_OPTIONS = {
     "mp3_320": {"codec": "mp3", "quality": "320", "ext": "mp3", "label": "MP3 320kbps"},
@@ -111,6 +178,8 @@ def _extract_and_download(
         }
         if proxy_url:
             opts["proxy"] = proxy_url
+        if COOKIE_PATH:
+            opts["cookiefile"] = COOKIE_PATH
         opts["extractor_args"] = {
             "youtube": {
                 "player_client": ["tv", "android_vr"],
