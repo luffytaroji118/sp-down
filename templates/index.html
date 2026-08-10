@@ -29,10 +29,10 @@
         </header>
 
         <div class="card input-card upload-card">
-            <div class="section-label"><span class="step-number">01</span><div><strong>Drop your playlist</strong><small>Public Spotify playlist links work best</small></div></div>
+            <div class="section-label"><span class="step-number">01</span><div><strong>Drop a link or name a song</strong><small>Paste a Spotify playlist/track link, or type a song name like “Rap God”</small></div></div>
             <div class="input-group">
-                <div class="url-field"><span class="url-icon">↗</span><input type="text" id="playlist-url" placeholder="https://open.spotify.com/playlist/..." autocomplete="off"></div>
-                <button id="load-btn" class="btn btn-primary"><span>Load playlist</span><span class="btn-arrow">→</span></button>
+                <div class="url-field"><span class="url-icon">↗</span><input type="text" id="playlist-url" placeholder="Spotify link or song name…" autocomplete="off"></div>
+                <button id="load-btn" class="btn btn-primary"><span>Search</span><span class="btn-arrow">→</span></button>
             </div>
             <div id="input-error" class="error-msg"></div>
         </div>
@@ -59,6 +59,25 @@
                 </div>
             </div>
             <div class="list-heading"><span>TRACKS IN PLAYLIST</span><span>STATUS</span></div><div id="track-list" class="track-list"></div>
+        </div>
+
+        <div id="search-info" class="card playlist-card hidden">
+            <div class="section-label"><span class="step-number">02</span><div><strong>Pick a result to download</strong><small id="search-query-label">Choose a track below</small></div></div>
+            <div class="playlist-header">
+                <div>
+                    <h2 id="search-query-text"></h2>
+                    <span id="search-count" class="track-count"></span>
+                </div>
+                <div class="download-controls">
+                    <label class="control-field"><span>Audio format</span><select id="search-format-select" class="select">
+                        {% for fmt in formats %}
+                        <option value="{{ fmt.key }}">{{ fmt.label }}</option>
+                        {% endfor %}
+                    </select></label>
+                </div>
+            </div>
+            <div class="list-heading"><span>SEARCH RESULTS</span><span></span></div>
+            <div id="search-list" class="track-list"></div>
         </div>
 
         <div id="progress-section" class="card hidden">
@@ -100,6 +119,7 @@
             </div>
             <div class="individual-toolbar">
                 <button id="download-all-individual" class="btn btn-primary"><span>Download all tracks</span><span>↓</span></button>
+                <button id="individual-back-btn" class="btn btn-ghost">Back</button>
             </div>
             <div id="individual-file-list" class="individual-file-list"></div>
         </div>
@@ -119,9 +139,6 @@
 
         <div id="loading-spinner" class="spinner hidden"></div>
 
-        <footer>
-            <p>For personal use only. Downloads audio from YouTube based on track names.</p>
-        </footer>
     </div>
     <script src="/static/app.js"></script>
 </body>

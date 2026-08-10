@@ -13,8 +13,13 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.requests import Request
 
-from spotify import fetch_tracks
-from downloader import download_playlist, FORMAT_OPTIONS
+from spotify import fetch_tracks, fetch_single_track, is_spotify_track_url
+from downloader import (
+    download_playlist,
+    download_track_by_url,
+    search_youtube,
+    FORMAT_OPTIONS,
+)
 
 app = FastAPI(title="Spotify Playlist Downloader")
 
@@ -44,7 +49,12 @@ async def get_playlist(data: dict):
     if not url:
         raise HTTPException(400, "URL is required")
     try:
-        playlist_name, tracks = await asyncio.to_thread(fetch_tracks, url)
+        if is_spotify_track_url(url):
+            track = await asyncio.to_thread(fetch_single_track, url)
+            tracks = [track]
+            playlist_name = track.title
+        else:
+            playlist_name, tracks = await asyncio.to_thread(fetch_tracks, url)
         if limit and isinstance(limit, int) and limit > 0:
             tracks = tracks[:limit]
         return {
@@ -52,6 +62,18 @@ async def get_playlist(data: dict):
             "total": len(tracks),
             "tracks": [t.to_dict() for t in tracks],
         }
+    except Exception as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/api/search")
+async def search_tracks(data: dict):
+    query = data.get("query", "").strip()
+    if not query:
+        raise HTTPException(400, "Search query is required")
+    try:
+        results = await asyncio.to_thread(search_youtube, query, 10)
+        return {"query": query, "total": len(results), "results": results}
     except Exception as e:
         raise HTTPException(400, str(e))
 
@@ -139,6 +161,73 @@ async def _run_download(job_id, tracks, song_dir, fmt_key, stop_event, pack_zip=
             job["status"] = "done"
         else:
             job["status"] = "stopped"
+    except Exception as e:
+        job["status"] = "error"
+        job["error"] = str(e)
+
+
+@app.post("/api/download_track")
+async def download_single(data: dict):
+    video_url = data.get("video_url", "").strip()
+    title = data.get("title", "Unknown").strip() or "Unknown"
+    artists = data.get("artists", "Unknown").strip() or "Unknown"
+    fmt_key = data.get("format", "mp3_320")
+    if not video_url:
+        raise HTTPException(400, "video_url is required")
+    if fmt_key not in FORMAT_OPTIONS:
+        raise HTTPException(400, f"Invalid format: {fmt_key}")
+
+    job_id = uuid.uuid4().hex[:12]
+    safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in title)[:50]
+    job_dir = TEMP_DIR / job_id
+    song_dir = job_dir / safe_name
+    stop_event = threading.Event()
+
+    jobs[job_id] = {
+        "status": "downloading",
+        "mode": "individual",
+        "playlist_name": title,
+        "total": 1,
+        "completed": 0,
+        "failed": 0,
+        "current_index": 0,
+        "current_title": title,
+        "current_titles": [],
+        "track_status": [None],
+        "files": [],
+        "zip_path": None,
+        "song_dir": None,
+        "error": None,
+        "created_at": time.time(),
+        "stop_event": stop_event,
+    }
+
+    asyncio.create_task(_run_single_download(job_id, video_url, title, artists, song_dir, fmt_key, stop_event))
+    return {"job_id": job_id, "total": 1}
+
+
+async def _run_single_download(job_id, video_url, title, artists, song_dir, fmt_key, stop_event):
+    job = jobs[job_id]
+    job["track_status"][0] = "downloading"
+    try:
+        loop = asyncio.get_event_loop()
+        path = await loop.run_in_executor(
+            None,
+            lambda: download_track_by_url(video_url, title, artists, song_dir, fmt_key, 1),
+        )
+        if path:
+            job["track_status"][0] = "done"
+            job["completed"] = 1
+            job["files"].append({"index": 1, "name": Path(path).name, "path": str(path)})
+            job["song_dir"] = str(song_dir)
+            job["status"] = "done"
+        elif stop_event.is_set():
+            job["status"] = "stopped"
+        else:
+            job["track_status"][0] = "failed"
+            job["failed"] = 1
+            job["status"] = "error"
+            job["error"] = "Download failed. Try another result or format."
     except Exception as e:
         job["status"] = "error"
         job["error"] = str(e)

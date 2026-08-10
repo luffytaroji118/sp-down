@@ -27,9 +27,18 @@ const stopBtn = $('stop-btn');
 const stoppedSection = $('stopped-section');
 const stoppedSummaryText = $('stopped-summary-text');
 const backBtn = $('back-btn');
+const searchInfo = $('search-info');
+const searchQueryText = $('search-query-text');
+const searchCount = $('search-count');
+const searchList = $('search-list');
+const searchFormatSelect = $('search-format-select');
+const searchQueryLabel = $('search-query-label');
+const individualBackBtn = $('individual-back-btn');
 
 let loadedTracks = [];
 let currentJobId = null;
+let currentSearchResults = [];
+let lastInputMode = 'playlist';
 
 async function api(path, body) {
     const resp = await fetch(path, {
@@ -64,17 +73,40 @@ function statusIcon(status) {
     return '<span class="status-icon status-pending">&#8226;</span>';
 }
 
+function isSpotifyUrl(s) {
+    return /spotify\.com|spotify:/.test(s);
+}
+
+function setBtnLabel(btn, label) {
+    if (btn.firstElementChild) btn.firstElementChild.textContent = label;
+    else btn.textContent = label;
+}
+
+function hideResultCards() {
+    playlistInfo.classList.add('hidden');
+    searchInfo.classList.add('hidden');
+}
+
 loadBtn.addEventListener('click', async () => {
     const url = urlInput.value.trim();
     if (!url) {
-        showError('Please paste a Spotify playlist URL');
+        showError('Paste a Spotify link or type a song name');
         return;
     }
     clearError();
+    if (isSpotifyUrl(url)) {
+        loadPlaylist(url);
+    } else {
+        loadSearchResults(url);
+    }
+});
+
+async function loadPlaylist(url) {
+    lastInputMode = 'playlist';
     loadBtn.disabled = true;
-    loadBtn.textContent = 'Loading...';
+    setBtnLabel(loadBtn, 'Loading...');
     spinner.classList.remove('hidden');
-    playlistInfo.classList.add('hidden');
+    hideResultCards();
 
     try {
         const limitVal = document.getElementById('limit-input').value;
@@ -104,8 +136,77 @@ loadBtn.addEventListener('click', async () => {
         showError(e.message);
     } finally {
         loadBtn.disabled = false;
-        loadBtn.textContent = 'Load';
+        setBtnLabel(loadBtn, 'Search');
         spinner.classList.add('hidden');
+    }
+}
+
+async function loadSearchResults(query) {
+    lastInputMode = 'search';
+    loadBtn.disabled = true;
+    setBtnLabel(loadBtn, 'Searching...');
+    spinner.classList.remove('hidden');
+    hideResultCards();
+
+    try {
+        const data = await api('/api/search', { query });
+        currentSearchResults = data.results;
+        searchQueryText.textContent = `"${query}"`;
+        searchCount.textContent = `${data.total} results`;
+
+        if (!data.results.length) {
+            searchList.innerHTML = '<div class="search-empty">No results found. Try another name.</div>';
+        } else {
+            searchList.innerHTML = data.results.map((r, i) => `
+                <div class="track-row search-row" data-index="${i}">
+                    <span class="num">${i + 1}</span>
+                    <div class="info">
+                        <div class="title">${escapeHtml(r.title)}</div>
+                        <div class="artists">${escapeHtml(r.artists)}</div>
+                    </div>
+                    <span class="duration">${formatDuration(r.duration_ms)}</span>
+                    <button class="btn btn-green btn-sm search-download-btn" data-index="${i}"><span>Download</span><span>↓</span></button>
+                </div>
+            `).join('');
+        }
+        searchInfo.classList.remove('hidden');
+    } catch (e) {
+        showError(e.message);
+    } finally {
+        loadBtn.disabled = false;
+        setBtnLabel(loadBtn, 'Search');
+        spinner.classList.add('hidden');
+    }
+}
+
+searchList.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.search-download-btn');
+    if (!btn) return;
+    const idx = parseInt(btn.dataset.index, 10);
+    const result = currentSearchResults[idx];
+    if (!result) return;
+    clearError();
+    btn.disabled = true;
+    setBtnLabel(btn, 'Starting...');
+
+    try {
+        const data = await api('/api/download_track', {
+            video_url: result.video_url,
+            title: result.title,
+            artists: result.artists,
+            format: searchFormatSelect.value,
+        });
+        currentJobId = data.job_id;
+        setBtnLabel(btn, 'Download');
+        btn.disabled = false;
+        searchInfo.classList.add('hidden');
+        progressSection.classList.remove('hidden');
+        stopBtn.disabled = false;
+        pollStatus(data.job_id);
+    } catch (err) {
+        showError(err.message);
+        setBtnLabel(btn, 'Download');
+        btn.disabled = false;
     }
 });
 
@@ -113,7 +214,7 @@ downloadBtn.addEventListener('click', async () => {
     if (loadedTracks.length === 0) return;
     clearError();
     downloadBtn.disabled = true;
-    downloadBtn.textContent = 'Preparing...';
+    setBtnLabel(downloadBtn, 'Preparing...');
 
     try {
         const limitVal = document.getElementById('limit-input').value;
@@ -124,7 +225,7 @@ downloadBtn.addEventListener('click', async () => {
             limit: limitVal ? parseInt(limitVal) : null,
         });
         currentJobId = data.job_id;
-        downloadBtn.textContent = 'Start download';
+        setBtnLabel(downloadBtn, 'Start download');
         downloadBtn.disabled = false;
         playlistInfo.classList.add('hidden');
         progressSection.classList.remove('hidden');
@@ -133,19 +234,19 @@ downloadBtn.addEventListener('click', async () => {
     } catch (e) {
         showError(e.message);
         downloadBtn.disabled = false;
-        downloadBtn.textContent = 'Start download';
+        setBtnLabel(downloadBtn, 'Start download');
     }
 });
 
 stopBtn.addEventListener('click', async () => {
     if (!currentJobId) return;
     stopBtn.disabled = true;
-    stopBtn.textContent = 'Stopping...';
+    setBtnLabel(stopBtn, 'Stopping...');
     try {
         await api(`/api/stop/${currentJobId}`);
     } catch (e) {
         stopBtn.disabled = false;
-        stopBtn.textContent = 'Stop';
+        setBtnLabel(stopBtn, 'Stop');
     }
 });
 
@@ -233,7 +334,7 @@ function showIndividualReady(jobId, data) {
     downloadAllIndividual.dataset.jobId = jobId;
     downloadAllIndividual.dataset.fileCount = String(files.length);
     downloadAllIndividual.disabled = false;
-    downloadAllIndividual.textContent = 'Download all tracks';
+    setBtnLabel(downloadAllIndividual, 'Download all tracks');
 }
 
 async function downloadAllIndividualSequentially(jobId) {
@@ -259,10 +360,10 @@ async function downloadAllIndividualSequentially(jobId) {
             row.classList.add('failed-row');
         }
         done++;
-        downloadAllIndividual.textContent = `Downloading ${done}/${rows.length}`;
+        setBtnLabel(downloadAllIndividual, `Downloading ${done}/${rows.length}`);
         await new Promise(r => setTimeout(r, 600));
     }
-    downloadAllIndividual.textContent = 'Download all tracks';
+    setBtnLabel(downloadAllIndividual, 'Download all tracks');
     downloadAllIndividual.disabled = false;
 }
 
@@ -275,18 +376,26 @@ function showStopped(data) {
     progressSection.classList.add('hidden');
     stoppedSection.classList.remove('hidden');
     stoppedSummaryText.textContent = `${data.completed} songs downloaded, ${data.failed} failed before stopping.`;
-    stopBtn.textContent = 'Stop';
+    setBtnLabel(stopBtn, 'Stop');
     stopBtn.disabled = false;
 }
 
-backBtn.addEventListener('click', () => {
+function backToPrevious() {
+    individualReady.classList.add('hidden');
     stoppedSection.classList.add('hidden');
-    playlistInfo.classList.remove('hidden');
-});
+    if (lastInputMode === 'search') {
+        searchInfo.classList.remove('hidden');
+    } else {
+        playlistInfo.classList.remove('hidden');
+    }
+}
+
+backBtn.addEventListener('click', backToPrevious);
+individualBackBtn.addEventListener('click', backToPrevious);
 
 function resetDownloadBtn() {
     downloadBtn.disabled = false;
-    downloadBtn.textContent = 'Start download';
+    setBtnLabel(downloadBtn, 'Start download');
 }
 
 function escapeHtml(str) {

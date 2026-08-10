@@ -47,6 +47,28 @@ def extract_playlist_id(url: str) -> str:
     raise ValueError(f"Could not extract playlist ID from: {url}")
 
 
+def extract_track_id(url: str) -> str:
+    patterns = [
+        r"track/([a-zA-Z0-9]+)",
+        r"track:([a-zA-Z0-9]+)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1)
+    if re.match(r"^[a-zA-Z0-9]{22}$", url):
+        return url
+    raise ValueError(f"Could not extract track ID from: {url}")
+
+
+def is_spotify_track_url(url: str) -> bool:
+    return bool(re.search(r"track/([a-zA-Z0-9]+)", url) or url.startswith("spotify:track:"))
+
+
+def is_spotify_url(url: str) -> bool:
+    return bool(re.search(r"spotify\.com|spotify:", url, re.IGNORECASE))
+
+
 def _fetch_via_embed_token(playlist_id: str) -> tuple[str, list[Track]]:
     """Fetch all tracks using the access token from Spotify's embed page."""
     embed_url = f"https://open.spotify.com/embed/playlist/{playlist_id}"
@@ -173,3 +195,33 @@ def _fetch_via_embed_token(playlist_id: str) -> tuple[str, list[Track]]:
 def fetch_tracks(playlist_url: str) -> tuple[str, list[Track]]:
     playlist_id = extract_playlist_id(playlist_url)
     return _fetch_via_embed_token(playlist_id)
+
+
+def fetch_single_track(track_url: str) -> Track:
+    track_id = extract_track_id(track_url)
+    embed_url = f"https://open.spotify.com/embed/track/{track_id}"
+    req = urllib.request.Request(
+        embed_url,
+        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"},
+    )
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        html = resp.read().decode("utf-8")
+
+    match = re.search(
+        r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>',
+        html,
+        re.DOTALL,
+    )
+    if not match:
+        raise ValueError("Could not find track data in Spotify embed page")
+
+    data = json.loads(match.group(1))
+    entity = data["props"]["pageProps"]["state"]["data"]["entity"]
+    return Track(
+        index=1,
+        title=entity.get("title", "Unknown"),
+        artists=entity.get("subtitle", "Unknown"),
+        duration_ms=entity.get("duration", 0),
+        spotify_uri=entity.get("uri", ""),
+        is_playable=entity.get("isPlayable", True),
+    )

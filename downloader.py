@@ -239,6 +239,92 @@ def download_track(
     return None
 
 
+def download_track_by_url(
+    video_url: str,
+    title: str,
+    artists: str,
+    output_dir: Path,
+    fmt_key: str,
+    index: int = 1,
+    progress_hook: Optional[Callable] = None,
+) -> Optional[Path]:
+    fmt = FORMAT_OPTIONS.get(fmt_key, FORMAT_OPTIONS["mp3_320"])
+    output_dir.mkdir(parents=True, exist_ok=True)
+    filename = sanitize_filename(f"{index:02d}. {title} - {artists}")
+    output_template = str(output_dir / f"{filename}.%(ext)s")
+
+    ydl_opts = _player_opts()
+    ydl_opts.update({
+        "format": "ba[abr<=160]/bestaudio/best",
+        "noplaylist": True,
+        "no_progress": True,
+        "outtmpl": output_template,
+        "concurrent_fragment_downloads": 8,
+        "postprocessors": [
+            {
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": fmt["codec"],
+                "preferredquality": fmt["quality"],
+            },
+            {
+                "key": "FFmpegMetadata",
+            },
+        ],
+        "retries": 3,
+        "fragment_retries": 3,
+        "http_chunk_size": 1048576,
+    })
+
+    if progress_hook:
+        ydl_opts["progress_hooks"] = [progress_hook]
+
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([video_url])
+    except Exception as e:
+        print(f"[ERROR] direct download failed: {e}", flush=True)
+        return None
+
+    expected = output_dir / f"{filename}.{fmt['ext']}"
+    if expected.exists():
+        return expected
+    for f in output_dir.glob(f"{filename}.*"):
+        return f
+    return None
+
+
+def search_youtube(query: str, limit: int = 10) -> list[dict]:
+    search_opts = _player_opts()
+    search_opts.update({
+        "skip_download": True,
+        "extract_flat": True,
+        "default_search": f"ytsearch{limit}",
+    })
+    try:
+        with yt_dlp.YoutubeDL(search_opts) as ydl:
+            info = ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
+        entries = info.get("entries", []) if info else []
+        results = []
+        for e in entries:
+            if not e:
+                continue
+            vid_url = e.get("url") or e.get("id")
+            if not vid_url:
+                continue
+            if not vid_url.startswith("http"):
+                vid_url = f"https://www.youtube.com/watch?v={vid_url}"
+            results.append({
+                "title": e.get("title", "Unknown"),
+                "artists": e.get("uploader") or e.get("channel") or "Unknown",
+                "duration_ms": (e.get("duration") or 0) * 1000,
+                "video_url": vid_url,
+            })
+        return results
+    except Exception as e:
+        print(f"[SEARCH] query '{query}' failed: {e}", flush=True)
+        return []
+
+
 def download_playlist(
     tracks: list[Track],
     output_dir: Path,
