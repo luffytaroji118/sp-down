@@ -27,7 +27,6 @@ else:
 MAX_WORKERS = int(os.environ.get("MAX_WORKERS", 24))
 AUDIO_MAX_ABR = os.environ.get("AUDIO_MAX_ABR", "160")
 FRAGMENT_WORKERS = int(os.environ.get("FRAGMENT_WORKERS", 16))
-DOWNLOAD_CHUNK_SIZE = int(os.environ.get("DOWNLOAD_CHUNK_SIZE", 10 * 1024 * 1024))
 
 PROXY_RAW = os.environ.get("PROXY", "")
 PROXY_URL = ""
@@ -70,7 +69,7 @@ def _player_opts() -> dict:
     opts = _base_opts()
     opts["extractor_args"] = {
         "youtube": {
-            "player_client": ["android", "ios", "web"],
+            "player_client": ["ios", "android", "web"],
         }
     }
     return opts
@@ -221,7 +220,6 @@ def download_track(
         "retries": 5,
         "fragment_retries": 5,
         "file_access_retries": 5,
-        "http_chunk_size": DOWNLOAD_CHUNK_SIZE,
         "buffersize": 1024 * 1024,
     })
 
@@ -278,7 +276,6 @@ def download_track_by_url(
         "retries": 5,
         "fragment_retries": 5,
         "file_access_retries": 5,
-        "http_chunk_size": DOWNLOAD_CHUNK_SIZE,
         "buffersize": 1024 * 1024,
     })
 
