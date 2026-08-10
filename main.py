@@ -120,6 +120,8 @@ async def start_download(data: dict):
         "current_title": "",
         "current_titles": [],
         "track_status": [None] * len(tracks),
+        "track_progress": {},
+        "download_speed": 0,
         "files": [],
         "zip_path": None,
         "song_dir": None,
@@ -146,12 +148,26 @@ async def _run_download(job_id, tracks, song_dir, fmt_key, stop_event, pack_zip=
         else:
             job["track_status"][idx - 1] = "failed"
             job["failed"] += 1
+        job["track_progress"].pop(idx, None)
+
+    def on_progress(idx, info):
+        status = info.get("status")
+        if status == "downloading":
+            downloaded = info.get("downloaded_bytes", 0) or 0
+            total = info.get("total_bytes") or info.get("total_bytes_estimate") or 0
+            pct = round(downloaded / total * 100, 1) if total > 0 else 0
+            job["track_progress"][idx] = pct
+            speed = info.get("speed") or 0
+            if speed:
+                job["download_speed"] = speed
+        elif status == "finished":
+            job["track_progress"][idx] = 100
 
     try:
         loop = asyncio.get_event_loop()
         result_path = await loop.run_in_executor(
             None,
-            lambda: download_playlist(tracks, song_dir, fmt_key, on_start, on_done, stop_event, pack_zip=pack_zip),
+            lambda: download_playlist(tracks, song_dir, fmt_key, on_start, on_done, stop_event, pack_zip=pack_zip, on_progress=on_progress),
         )
         if result_path:
             if pack_zip:
@@ -194,6 +210,8 @@ async def download_single(data: dict):
         "current_title": title,
         "current_titles": [],
         "track_status": [None],
+        "track_progress": {},
+        "download_speed": 0,
         "files": [],
         "zip_path": None,
         "song_dir": None,
@@ -209,11 +227,25 @@ async def download_single(data: dict):
 async def _run_single_download(job_id, video_url, title, artists, song_dir, fmt_key, stop_event):
     job = jobs[job_id]
     job["track_status"][0] = "downloading"
+
+    def on_progress(info):
+        status = info.get("status")
+        if status == "downloading":
+            downloaded = info.get("downloaded_bytes", 0) or 0
+            total = info.get("total_bytes") or info.get("total_bytes_estimate") or 0
+            pct = round(downloaded / total * 100, 1) if total > 0 else 0
+            job["track_progress"][1] = pct
+            speed = info.get("speed") or 0
+            if speed:
+                job["download_speed"] = speed
+        elif status == "finished":
+            job["track_progress"][1] = 100
+
     try:
         loop = asyncio.get_event_loop()
         path = await loop.run_in_executor(
             None,
-            lambda: download_track_by_url(video_url, title, artists, song_dir, fmt_key, 1),
+            lambda: download_track_by_url(video_url, title, artists, song_dir, fmt_key, 1, progress_hook=on_progress),
         )
         if path:
             job["track_status"][0] = "done"
@@ -255,6 +287,8 @@ async def get_status(job_id: str):
         "current_title": job["current_title"],
         "current_downloading": current_titles,
         "track_status": job["track_status"],
+        "track_progress": job.get("track_progress", {}),
+        "download_speed": job.get("download_speed", 0),
         "files": [{"index": f["index"], "name": f["name"]} for f in job["files"]],
         "error": job["error"],
     })

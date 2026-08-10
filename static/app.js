@@ -14,6 +14,10 @@ const progressSection = $('progress-section');
 const progressBar = $('progress-bar');
 const progressText = $('progress-text');
 const currentTrack = $('current-track');
+const currentTrackText = $('current-track-text');
+const progressDetail = $('progress-detail');
+const elapsedTime = $('elapsed-time');
+const downloadSpeed = $('download-speed');
 const downloadReady = $('download-ready');
 const downloadLink = $('download-link');
 const summaryText = $('summary-text');
@@ -39,6 +43,9 @@ let loadedTracks = [];
 let currentJobId = null;
 let currentSearchResults = [];
 let lastInputMode = 'playlist';
+let pollTimer = null;
+let elapsedTimer = null;
+let downloadStartTime = null;
 
 async function api(path, body) {
     const resp = await fetch(path, {
@@ -250,10 +257,27 @@ stopBtn.addEventListener('click', async () => {
     }
 });
 
-let pollTimer = null;
+function startElapsedTimer() {
+    downloadStartTime = Date.now();
+    elapsedTime.textContent = '0:00';
+    if (elapsedTimer) clearInterval(elapsedTimer);
+    elapsedTimer = setInterval(() => {
+        if (!downloadStartTime) return;
+        const secs = Math.floor((Date.now() - downloadStartTime) / 1000);
+        const m = Math.floor(secs / 60);
+        const s = secs % 60;
+        elapsedTime.textContent = `${m}:${s.toString().padStart(2, '0')}`;
+    }, 1000);
+}
+
+function stopElapsedTimer() {
+    if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
+    downloadStartTime = null;
+}
 
 function pollStatus(jobId) {
     if (pollTimer) clearInterval(pollTimer);
+    startElapsedTimer();
     pollTimer = setInterval(async () => {
         try {
             const resp = await fetch(`/api/status/${jobId}`);
@@ -261,6 +285,7 @@ function pollStatus(jobId) {
             updateProgress(data);
             if (data.status === 'done') {
                 clearInterval(pollTimer);
+                stopElapsedTimer();
                 if (data.mode === 'individual') {
                     showIndividualReady(jobId, data);
                 } else {
@@ -268,32 +293,59 @@ function pollStatus(jobId) {
                 }
             } else if (data.status === 'error') {
                 clearInterval(pollTimer);
+                stopElapsedTimer();
                 showError(data.error || 'Download failed');
                 resetDownloadBtn();
                 progressSection.classList.add('hidden');
             } else if (data.status === 'stopped') {
                 clearInterval(pollTimer);
+                stopElapsedTimer();
                 showStopped(data);
             }
         } catch (e) {
             clearInterval(pollTimer);
+            stopElapsedTimer();
             showError('Lost connection to server');
             resetDownloadBtn();
         }
     }, 1000);
 }
 
+function formatSpeed(bytesPerSec) {
+    if (!bytesPerSec || bytesPerSec <= 0) return '';
+    if (bytesPerSec >= 1048576) return `${(bytesPerSec / 1048576).toFixed(1)} MB/s`;
+    if (bytesPerSec >= 1024) return `${(bytesPerSec / 1024).toFixed(0)} KB/s`;
+    return `${bytesPerSec.toFixed(0)} B/s`;
+}
+
 function updateProgress(data) {
     const done = data.completed + data.failed;
-    const pct = data.total > 0 ? (done / data.total) * 100 : 0;
-    progressBar.style.width = `${pct}%`;
+    const trackProg = data.track_progress || {};
+
+    let completedUnits = done;
+    (data.track_status || []).forEach((status, i) => {
+        if (status === 'downloading') {
+            const p = trackProg[i + 1] || 0;
+            completedUnits += p / 100;
+        }
+    });
+    const pct = data.total > 0 ? (completedUnits / data.total) * 100 : 0;
+    progressBar.style.width = `${Math.min(pct, 100)}%`;
     progressText.textContent = `${done} / ${data.total}`;
 
-    if (data.current_downloading && data.current_downloading.length > 0) {
-        currentTrack.textContent = `Downloading: ${data.current_downloading.join(', ')}`;
-    } else if (data.current_title) {
-        currentTrack.textContent = `Now downloading: ${data.current_title}`;
+    const dlTracks = data.current_downloading || [];
+    if (dlTracks.length > 0 || data.current_title) {
+        const label = dlTracks.length > 0 ? `Downloading: ${dlTracks.join(', ')}` : `Now downloading: ${data.current_title}`;
+        const firstDlIdx = (data.track_status || []).findIndex(s => s === 'downloading');
+        const tp = firstDlIdx >= 0 ? (trackProg[firstDlIdx + 1] || 0) : 0;
+        currentTrackText.textContent = label;
+        progressDetail.textContent = tp > 0 ? `${Math.round(tp)}%` : '';
+    } else {
+        currentTrackText.textContent = 'Preparing…';
+        progressDetail.textContent = '';
     }
+
+    downloadSpeed.textContent = formatSpeed(data.download_speed || 0);
 
     data.track_status.forEach((status, i) => {
         const row = $(`track-${i}`);

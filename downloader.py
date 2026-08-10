@@ -334,6 +334,7 @@ def download_playlist(
     stop_event: Optional[threading.Event] = None,
     max_workers: int = MAX_WORKERS,
     pack_zip: bool = True,
+    on_progress: Optional[Callable[[int, dict], None]] = None,
 ) -> Optional[Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -341,7 +342,8 @@ def download_playlist(
         if stop_event and stop_event.is_set():
             return track.index, None
         on_track_start(track.index, track)
-        result = download_track(track, output_dir, fmt_key)
+        hook = (lambda d: on_progress(track.index, d)) if on_progress else None
+        result = download_track(track, output_dir, fmt_key, progress_hook=hook)
         return track.index, result
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
