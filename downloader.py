@@ -35,6 +35,7 @@ HTTP_CHUNK_SIZE = int(os.environ.get("HTTP_CHUNK_SIZE", 9_000_000))
 THROTTLED_RATE = int(os.environ.get("THROTTLED_RATE", 100_000))
 DIRECT_FIRST = os.environ.get("DIRECT_FIRST", "false").lower() in ("1", "true", "yes")
 POT_PROVIDER_URL = os.environ.get("POT_PROVIDER_URL", "https://po-production-93d7.up.railway.app/getPot")
+AUDIO_STREAM_URL = os.environ.get("AUDIO_STREAM_URL", "https://po-production-93d7.up.railway.app/getAudioStream")
 
 PROXY_RAW = os.environ.get("PROXY", "")
 PROXY_URL = ""
@@ -197,44 +198,56 @@ def _download_opts() -> dict:
 
 
 def _download_audio_direct(
-    audio_url: str,
+    video_id: str,
     output_path: Path,
     fmt: dict,
     progress_hook: Optional[Callable] = None,
 ) -> Optional[Path]:
-    """Download audio URL directly + convert with ffmpeg. Skips yt-dlp extraction entirely."""
+    """Stream audio from PO token API + convert with ffmpeg. Skips yt-dlp extraction entirely."""
     try:
-        print(f"[INFO] Downloading audio directly (no yt-dlp extraction)…", flush=True)
-        tmp_path = output_path.with_suffix(".webm")
-        req = urllib.request.Request(audio_url, headers={"User-Agent": _UA})
-        total = 0
-        with urllib.request.urlopen(req, timeout=30) as resp, open(tmp_path, "wb") as f:
-            while True:
-                chunk = resp.read(1024 * 1024)
-                if not chunk:
-                    break
-                f.write(chunk)
-                total += len(chunk)
-                if progress_hook:
-                    progress_hook({"status": "downloading", "downloaded_bytes": total, "total_bytes": int(resp.headers.get("Content-Length", 0)) or 0})
+        stream_url = f"{AUDIO_STREAM_URL}?content_binding={video_id}"
+        print(f"[INFO] Streaming audio from API for {video_id}…", flush=True)
+
+        # Stream to temp file
+        tmp_path = output_path.with_suffix(".m4a")
+        req = urllib.request.Request(stream_url, headers={"User-Agent": _UA})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            content_length = int(resp.headers.get("Content-Length", 0) or 0)
+            total = 0
+            with open(tmp_path, "wb") as f:
+                while True:
+                    chunk = resp.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    total += len(chunk)
+                    if progress_hook:
+                        progress_hook({"status": "downloading", "downloaded_bytes": total, "total_bytes": content_length})
         if progress_hook:
             progress_hook({"status": "finished"})
-        print(f"[INFO] Downloaded {total / 1048576:.1f} MB, converting with ffmpeg…", flush=True)
-        ffmpeg_cmd = [
-            "ffmpeg", "-y", "-i", str(tmp_path),
-            "-codec:a", fmt["codec"],
-            "-q:a", "2" if fmt["quality"] == "0" else fmt["quality"],
-            str(output_path),
-        ]
+
+        print(f"[INFO] Downloaded {total / 1048576:.1f} MB, converting to {fmt['ext']}…", flush=True)
+
+        # Convert to target format with ffmpeg
+        quality_args = []
+        if fmt["codec"] == "mp3":
+            quality_args = ["-b:a", f"{fmt['quality']}k"]
+        elif fmt["codec"] == "flac":
+            quality_args = ["-c:a", "flac"]
+        elif fmt["codec"] == "m4a":
+            quality_args = ["-c:a", "aac", "-b:a", "256k"]
+
+        ffmpeg_cmd = ["ffmpeg", "-y", "-i", str(tmp_path)] + quality_args + [str(output_path)]
         result = subprocess.run(ffmpeg_cmd, capture_output=True, timeout=60)
         tmp_path.unlink(missing_ok=True)
+
         if output_path.exists():
-            print(f"[INFO] Conversion done: {output_path.name}", flush=True)
+            print(f"[INFO] Done: {output_path.name} ({output_path.stat().st_size / 1048576:.1f} MB)", flush=True)
             return output_path
         print(f"[ERROR] ffmpeg failed: {result.stderr.decode()[-300:]}", flush=True)
         return None
     except Exception as e:
-        print(f"[ERROR] Direct audio download failed: {e}", flush=True)
+        print(f"[ERROR] Audio stream download failed: {e}", flush=True)
         return None
 
 
@@ -302,33 +315,31 @@ def _extract_and_download(
             opts["progress_hooks"] = [progress_hook]
         return opts
 
-    # Attempt 1: If API provides audio URL, download directly (skip yt-dlp extraction entirely)
+    # Attempt 1: Stream audio directly from API (fastest — skips yt-dlp extraction entirely)
     video_id = _extract_video_id(video_url)
-    if video_id and POT_PROVIDER_URL:
-        pot = _get_pot_token(video_id, with_audio=True)
-        if pot:
-            # Fastest path: direct audio URL download + ffmpeg convert
-            if pot.get("audio_url"):
-                from pathlib import PurePath
-                base = output_template.replace(".%(ext)s", "").replace("%(ext)s", "")
-                if base.endswith("."):
-                    base = base[:-1]
-                output_path = Path(base + "." + fmt["ext"])
-                result = _download_audio_direct(pot["audio_url"], output_path, fmt, progress_hook)
-                if result and result.exists():
-                    return True
-                print("[INFO] Direct audio URL download failed, trying PO token + yt-dlp…", flush=True)
-            # Fallback: PO token + yt-dlp web client extraction
-            if pot.get("po_token") and COOKIE_PATH:
-                print("[INFO] Trying direct download with PO token…", flush=True)
-                try:
-                    with yt_dlp.YoutubeDL(_build_direct_opts(pot["po_token"])) as ydl:
-                        ydl.download([video_url])
-                    return True
-                except Exception as e:
-                    print(f"[INFO] PO token direct failed ({e}), falling back to proxy…", flush=True)
+    if video_id and AUDIO_STREAM_URL:
+        base = output_template.replace(".%(ext)s", "").replace("%(ext)s", "")
+        if base.endswith("."):
+            base = base[:-1]
+        output_path = Path(base + "." + fmt["ext"])
+        result = _download_audio_direct(video_id, output_path, fmt, progress_hook)
+        if result and result.exists():
+            return True
+        print("[INFO] Audio stream failed, trying PO token + yt-dlp…", flush=True)
 
-    # Attempt 2: Proxy download (no PO token, tv/android_vr clients)
+    # Attempt 2: PO token + yt-dlp web client extraction
+    if video_id and POT_PROVIDER_URL and COOKIE_PATH:
+        pot = _get_pot_token(video_id)
+        if pot and pot.get("po_token"):
+            print("[INFO] Trying direct download with PO token…", flush=True)
+            try:
+                with yt_dlp.YoutubeDL(_build_direct_opts(pot["po_token"])) as ydl:
+                    ydl.download([video_url])
+                return True
+            except Exception as e:
+                print(f"[INFO] PO token direct failed ({e}), falling back to proxy…", flush=True)
+
+    # Attempt 3: Proxy download (no PO token, tv/android_vr clients)
     if not PROXY_URL:
         print("[INFO] No proxy configured — downloading directly…", flush=True)
         try:
