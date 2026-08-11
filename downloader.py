@@ -125,19 +125,29 @@ def _extract_video_id(url: str) -> Optional[str]:
     return m.group(1) if m else None
 
 
-def _get_pot_token(video_id: str) -> Optional[dict]:
-    """Fetch a PO token from the provider. Returns {'po_token': str} or None."""
+def _get_pot_token(video_id: str, with_audio: bool = False) -> Optional[dict]:
+    """Fetch PO token (and optionally audio URL) from the provider."""
     try:
-        api_url = f"{POT_PROVIDER_URL}?content_binding={video_id}"
-        print(f"[INFO] Requesting PO token for {video_id}…", flush=True)
+        params = f"content_binding={video_id}"
+        if with_audio:
+            params += "&audio=1"
+        api_url = f"{POT_PROVIDER_URL}?{params}"
+        print(f"[INFO] Requesting PO token{' + audio' if with_audio else ''} for {video_id}…", flush=True)
         req = urllib.request.Request(api_url, headers={"User-Agent": _UA})
-        with urllib.request.urlopen(req, timeout=20) as resp:
+        with urllib.request.urlopen(req, timeout=25) as resp:
             data = json.loads(resp.read().decode("utf-8"))
         token = data.get("poToken")
+        audio_url = data.get("audioUrl")
         if token:
-            print(f"[INFO] PO token received ({len(token)} chars)", flush=True)
-            return {"po_token": token}
-        print(f"[WARNING] PO token empty in response: {data}", flush=True)
+            extras = []
+            if audio_url:
+                extras.append(f"audio URL ({len(audio_url)} chars)")
+            print(f"[INFO] PO token received ({len(token)} chars)" + (f" + {' + '.join(extras)}" if extras else ""), flush=True)
+            result = {"po_token": token}
+            if audio_url:
+                result["audio_url"] = audio_url
+            return result
+        print(f"[WARNING] PO token empty in response keys: {list(data.keys())}", flush=True)
     except Exception as e:
         print(f"[WARNING] PO token fetch failed: {e}", flush=True)
     return None
@@ -184,6 +194,48 @@ def _download_opts() -> dict:
         "fragment_retries": 5,
         "file_access_retries": 5,
     }
+
+
+def _download_audio_direct(
+    audio_url: str,
+    output_path: Path,
+    fmt: dict,
+    progress_hook: Optional[Callable] = None,
+) -> Optional[Path]:
+    """Download audio URL directly + convert with ffmpeg. Skips yt-dlp extraction entirely."""
+    try:
+        print(f"[INFO] Downloading audio directly (no yt-dlp extraction)…", flush=True)
+        tmp_path = output_path.with_suffix(".webm")
+        req = urllib.request.Request(audio_url, headers={"User-Agent": _UA})
+        total = 0
+        with urllib.request.urlopen(req, timeout=30) as resp, open(tmp_path, "wb") as f:
+            while True:
+                chunk = resp.read(1024 * 1024)
+                if not chunk:
+                    break
+                f.write(chunk)
+                total += len(chunk)
+                if progress_hook:
+                    progress_hook({"status": "downloading", "downloaded_bytes": total, "total_bytes": int(resp.headers.get("Content-Length", 0)) or 0})
+        if progress_hook:
+            progress_hook({"status": "finished"})
+        print(f"[INFO] Downloaded {total / 1048576:.1f} MB, converting with ffmpeg…", flush=True)
+        ffmpeg_cmd = [
+            "ffmpeg", "-y", "-i", str(tmp_path),
+            "-codec:a", fmt["codec"],
+            "-q:a", "2" if fmt["quality"] == "0" else fmt["quality"],
+            str(output_path),
+        ]
+        result = subprocess.run(ffmpeg_cmd, capture_output=True, timeout=60)
+        tmp_path.unlink(missing_ok=True)
+        if output_path.exists():
+            print(f"[INFO] Conversion done: {output_path.name}", flush=True)
+            return output_path
+        print(f"[ERROR] ffmpeg failed: {result.stderr.decode()[-300:]}", flush=True)
+        return None
+    except Exception as e:
+        print(f"[ERROR] Direct audio download failed: {e}", flush=True)
+        return None
 
 
 def _extract_and_download(
@@ -250,18 +302,31 @@ def _extract_and_download(
             opts["progress_hooks"] = [progress_hook]
         return opts
 
-    # Attempt 1: Direct download with PO token + cookies (fast, zero proxy data)
+    # Attempt 1: If API provides audio URL, download directly (skip yt-dlp extraction entirely)
     video_id = _extract_video_id(video_url)
-    if video_id and COOKIE_PATH and POT_PROVIDER_URL:
-        pot = _get_pot_token(video_id)
+    if video_id and POT_PROVIDER_URL:
+        pot = _get_pot_token(video_id, with_audio=True)
         if pot:
-            print("[INFO] Trying direct download with PO token…", flush=True)
-            try:
-                with yt_dlp.YoutubeDL(_build_direct_opts(pot["po_token"])) as ydl:
-                    ydl.download([video_url])
-                return True
-            except Exception as e:
-                print(f"[INFO] PO token direct failed ({e}), falling back to proxy…", flush=True)
+            # Fastest path: direct audio URL download + ffmpeg convert
+            if pot.get("audio_url"):
+                from pathlib import PurePath
+                base = output_template.replace(".%(ext)s", "").replace("%(ext)s", "")
+                if base.endswith("."):
+                    base = base[:-1]
+                output_path = Path(base + "." + fmt["ext"])
+                result = _download_audio_direct(pot["audio_url"], output_path, fmt, progress_hook)
+                if result and result.exists():
+                    return True
+                print("[INFO] Direct audio URL download failed, trying PO token + yt-dlp…", flush=True)
+            # Fallback: PO token + yt-dlp web client extraction
+            if pot.get("po_token") and COOKIE_PATH:
+                print("[INFO] Trying direct download with PO token…", flush=True)
+                try:
+                    with yt_dlp.YoutubeDL(_build_direct_opts(pot["po_token"])) as ydl:
+                        ydl.download([video_url])
+                    return True
+                except Exception as e:
+                    print(f"[INFO] PO token direct failed ({e}), falling back to proxy…", flush=True)
 
     # Attempt 2: Proxy download (no PO token, tv/android_vr clients)
     if not PROXY_URL:
