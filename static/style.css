@@ -113,9 +113,9 @@ input::placeholder { color: #657182; }
 
 .collapsible-toggle { display: flex; justify-content: space-between; align-items: center; gap: 14px; width: 100%; padding: 18px 22px; background: transparent; border: 0; color: inherit; -webkit-appearance: none; appearance: none; cursor: pointer; text-align: left; transition: background var(--transition); }
 .collapsible-toggle:hover { background: rgba(255, 255, 255, .035); }
-.collapsible-toggle-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.collapsible-toggle-left { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1 1 auto; }
 .collapsible-toggle-left strong { display: block; font-size: 14px; }
-.collapsible-toggle-left small { display: block; margin-top: 4px; color: var(--text-sub); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.collapsible-toggle-left small { display: block; margin-top: 4px; color: var(--text-sub); font-size: 12px; line-height: 1.4; }
 .collapsible-toggle-right { display: flex; align-items: center; gap: 12px; flex: 0 0 auto; }
 .collapsible-body { padding: 0 22px 22px; display: flex; flex-direction: column; gap: 14px; }
 

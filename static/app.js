@@ -671,8 +671,8 @@ function renderCart() {
     cartDownloadBtn.disabled = cart.length === 0;
     cartClearBtn.disabled = cart.length === 0;
     cartSubtitle.textContent = cart.length === 0
-        ? 'Search a song and add it here to download all at once later'
-        : `${cart.length} ${cart.length === 1 ? 'track' : 'tracks'} ready — tap to expand`;
+        ? 'Search above and add tracks here to download together'
+        : `${cart.length} ${cart.length === 1 ? 'track' : 'tracks'} ready to download`;
 
     if (cart.length === 0) {
         cartList.innerHTML = '<div class="search-empty">Your cart is empty. Search above and tap “Add to cart”.</div>';
