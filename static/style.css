@@ -127,7 +127,7 @@ input::placeholder { color: #657182; }
 .cart-chevron { color: var(--text-sub); font-size: 13px; transition: transform .2s ease; }
 .collapsible-toggle[aria-expanded="true"] .cart-chevron { transform: rotate(180deg); }
 .cart-controls { grid-template-columns: repeat(2, minmax(100px, 1fr)) auto auto; padding: 14px 22px 0; }
-.cart-row .cart-remove-btn, .cart-row .cart-download-btn { flex: 0 0 auto; }
+.cart-row .cart-remove-btn { flex: 0 0 auto; }
 .search-row .search-cart-btn, .search-row .search-download-btn { flex: 0 0 auto; }
 .playlist-row .playlist-cart-btn, .playlist-row .playlist-download-btn { flex: 0 0 auto; }
 .status-wrap { display: grid; place-items: center; width: 22px; flex: 0 0 auto; }

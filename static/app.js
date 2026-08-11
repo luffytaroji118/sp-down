@@ -730,47 +730,16 @@ function renderCart() {
                 <div class="artists">${escapeHtml(c.artists)}</div>
             </div>
             <span class="duration">${formatDuration(c.duration_ms)}</span>
-            <button class="btn btn-green btn-sm cart-download-btn" data-index="${i}" title="Download"><span class="btn-text">Download</span><span class="btn-symbol">&darr;</span></button>
             <button class="btn btn-ghost btn-sm cart-remove-btn" data-index="${i}" title="Remove"><span class="btn-text">Remove</span><span class="btn-symbol">&times;</span></button>
             <span class="status-wrap"></span>
         </div>
     `).join('');
 }
 
-cartList.addEventListener('click', async (e) => {
+cartList.addEventListener('click', (e) => {
     const removeBtn = e.target.closest('.cart-remove-btn');
-    if (removeBtn) {
-        removeFromCart(parseInt(removeBtn.dataset.index, 10));
-        return;
-    }
-    const dlBtn = e.target.closest('.cart-download-btn');
-    if (!dlBtn) return;
-    const idx = parseInt(dlBtn.dataset.index, 10);
-    const c = cart[idx];
-    if (!c) return;
-    clearError();
-    dlBtn.disabled = true;
-    setBtnLabel(dlBtn, 'Starting...');
-    try {
-        const payload = c.video_url
-            ? { video_url: c.video_url, title: c.title, artists: c.artists, format: cartFormatSelect.value }
-            : { title: c.title, artists: c.artists, format: cartFormatSelect.value };
-        const endpoint = c.video_url ? '/api/download_track' : '/api/download_track_by_name';
-        const data = await api(endpoint, payload);
-        currentJobId = data.job_id;
-        lastInputMode = 'cart';
-        setBtnLabel(dlBtn, 'Download');
-        dlBtn.disabled = false;
-        cartCard.classList.add('hidden');
-        progressSection.classList.remove('hidden');
-        stopBtn.disabled = false;
-        scrollToEl(progressSection);
-        pollStatus(data.job_id);
-    } catch (err) {
-        showError(err.message);
-        setBtnLabel(dlBtn, 'Download');
-        dlBtn.disabled = false;
-    }
+    if (!removeBtn) return;
+    removeFromCart(parseInt(removeBtn.dataset.index, 10));
 });
 
 cartClearBtn.addEventListener('click', () => {
