@@ -300,7 +300,7 @@ trackList.addEventListener('click', async (e) => {
         const idx = parseInt(cartBtn.dataset.index, 10);
         const t = loadedTracks[idx];
         if (!t) return;
-        const item = { title: t.title, artists: t.artists, video_url: '', duration_ms: t.duration_ms };
+        const item = { title: t.title, artists: t.artists, video_url: '', duration_ms: t.duration_ms, cover_url: t.cover_url };
         if (!inCart(item)) {
             addToCart(item);
             markCartBtn(cartBtn, true);
@@ -671,11 +671,17 @@ function addToCart(result) {
         setTimeout(clearError, 1200);
         return;
     }
+    let coverUrl = result.cover_url || '';
+    if (!coverUrl && result.video_url) {
+        const vid = result.video_url.split('v=').pop();
+        if (vid) coverUrl = `https://i.ytimg.com/vi/${vid}/default.jpg`;
+    }
     cart.push({
         title: result.title,
         artists: result.artists,
-        video_url: result.video_url,
+        video_url: result.video_url || '',
         duration_ms: result.duration_ms || 0,
+        cover_url: coverUrl,
     });
     saveCart();
     renderCart();
@@ -712,6 +718,7 @@ function renderCart() {
     cartList.innerHTML = cart.map((c, i) => `
         <div class="track-row cart-row">
             <span class="num">${i + 1}</span>
+            ${c.cover_url ? `<img class="track-thumb" src="${c.cover_url}" alt="" loading="lazy">` : '<span class="track-thumb-placeholder"></span>'}
             <div class="info">
                 <div class="title">${escapeHtml(c.title)}</div>
                 <div class="artists">${escapeHtml(c.artists)}</div>
