@@ -107,7 +107,7 @@ input::placeholder { color: #657182; }
 .search-empty { padding: 28px 12px; text-align: center; color: var(--text-sub); font-size: 13px; }
 .individual-toolbar { gap: 10px; }
 
-.collapsible-toggle { display: flex; justify-content: space-between; align-items: center; gap: 14px; width: 100%; padding: 18px 22px; background: transparent; border: 0; cursor: pointer; text-align: left; transition: background var(--transition); }
+.collapsible-toggle { display: flex; justify-content: space-between; align-items: center; gap: 14px; width: 100%; padding: 18px 22px; background: transparent; border: 0; color: inherit; -webkit-appearance: none; appearance: none; cursor: pointer; text-align: left; transition: background var(--transition); }
 .collapsible-toggle:hover { background: rgba(255, 255, 255, .035); }
 .collapsible-toggle-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .collapsible-toggle-left strong { display: block; font-size: 14px; }
