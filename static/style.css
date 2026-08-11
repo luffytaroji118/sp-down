@@ -179,7 +179,7 @@ footer { margin-top: 34px; color: #667283; text-align: center; font-size: 11px; 
     .search-row .btn-text, .cart-row .btn-text, .playlist-row .btn-text { display: none; }
     .search-row .btn-symbol, .cart-row .btn-symbol, .playlist-row .btn-symbol { font-size: 16px; }
     .collapsible-toggle { padding: 15px 18px; }
-    .collapsible-body { padding: 0 18px 18px; }
+    .collapsible-body, .cart-body { padding: 0 18px 18px; }
     .playlist-header { padding: 0 18px; }
     .track-list { padding: 0 18px 14px; }
     .list-heading { padding-left: 42px; padding-right: 18px; }
@@ -189,6 +189,8 @@ footer { margin-top: 34px; color: #667283; text-align: center; font-size: 11px; 
     .track-row .duration { font-size: 10px; flex: 0 0 auto; }
     .playlist-row .status-wrap { width: 18px; }
     .playlist-row .playlist-cart-btn, .playlist-row .playlist-download-btn { min-width: 32px; min-height: 32px; padding: 5px; }
+    .cart-row .num { display: none; }
+    .cart-row .track-thumb, .cart-row .track-thumb-placeholder { width: 30px; height: 30px; }
 }
 
 @media (max-width: 480px) {
