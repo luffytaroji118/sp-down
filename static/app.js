@@ -195,9 +195,13 @@ async function loadSearchResults(query, live = false) {
         if (!data.results.length) {
             searchList.innerHTML = '<div class="search-empty">No results found. Try another name.</div>';
         } else {
-            searchList.innerHTML = data.results.map((r, i) => `
+            searchList.innerHTML = data.results.map((r, i) => {
+                const vid = r.video_url ? r.video_url.split('v=').pop() : '';
+                const thumb = vid ? `<img class="track-thumb" src="https://i.ytimg.com/vi/${vid}/default.jpg" alt="" loading="lazy">` : '<span class="track-thumb-placeholder"></span>';
+                return `
                 <div class="track-row search-row" data-index="${i}">
                     <span class="num">${i + 1}</span>
+                    ${thumb}
                     <div class="info">
                         <div class="title">${escapeHtml(r.title)}</div>
                         <div class="artists">${escapeHtml(r.artists)}</div>
@@ -205,8 +209,8 @@ async function loadSearchResults(query, live = false) {
                     <span class="duration">${formatDuration(r.duration_ms)}</span>
                     <button class="btn btn-ghost btn-sm search-cart-btn" data-index="${i}" title="Add to cart"><span class="btn-text">Add to cart</span><span class="btn-symbol">+</span></button>
                     <button class="btn btn-green btn-sm search-download-btn" data-index="${i}" title="Download"><span class="btn-text">Download</span><span class="btn-symbol">&darr;</span></button>
-                </div>
-            `).join('');
+                </div>`;
+            }).join('');
         }
         searchInfo.classList.remove('hidden');
         expand(searchToggle, searchBody);
