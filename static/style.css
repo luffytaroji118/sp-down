@@ -121,6 +121,7 @@ input::placeholder { color: #657182; }
 .collapsible-body { padding: 0 22px 22px; display: flex; flex-direction: column; gap: 14px; }
 
 .cart-card { padding: 0; overflow: hidden; }
+.cart-body { padding: 0 22px 22px; display: flex; flex-direction: column; gap: 14px; }
 .cart-step-icon { font-size: 13px; }
 .cart-count-badge { display: grid; place-items: center; min-width: 26px; height: 26px; padding: 0 8px; border-radius: 13px; background: rgba(184, 243, 74, .14); color: var(--accent); font-size: 12px; font-weight: 700; }
 .cart-chevron { color: var(--text-sub); font-size: 13px; transition: transform .2s ease; }
