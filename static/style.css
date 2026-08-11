@@ -163,18 +163,33 @@ footer { margin-top: 34px; color: #667283; text-align: center; font-size: 11px; 
     .download-controls { width: 100%; margin-top: 20px; grid-template-columns: 1fr 1fr; }
     .download-controls > .btn { grid-column: 1 / -1; width: 100%; }
     .limit-field { grid-column: 1 / -1; }
+    .cart-controls > .btn { grid-column: auto; width: 100%; min-height: 43px; }
+}
+
+@media (max-width: 560px) {
+    .search-row .btn-sm, .cart-row .btn-sm { min-width: 38px; min-height: 38px; padding: 7px; gap: 0; }
+    .search-row .btn-text, .cart-row .btn-text { display: none; }
+    .search-row .btn-symbol, .cart-row .btn-symbol { font-size: 17px; }
+    .collapsible-toggle { padding: 15px 18px; }
+    .collapsible-body { padding: 0 18px 18px; }
+    .playlist-header { padding: 0 18px; }
+    .track-list { padding: 0 18px 14px; }
+    .list-heading { padding-left: 42px; padding-right: 18px; }
 }
 
 @media (max-width: 480px) {
     body { padding: 12px; }
     .card { padding: 18px; border-radius: 16px; }
     .input-card { padding: 16px; }
-    .hero-copy h1 { font-size: 42px; }
+    .brand-lockup { margin-bottom: 22px; }
+    header { margin-bottom: 20px; }
+    .hero-copy h1 { font-size: 34px; margin: 10px 0 10px; }
+    .subtitle { font-size: 13px; }
     .input-group { display: grid; gap: 9px; }
     .input-group .btn { width: 100%; }
     .download-controls { grid-template-columns: 1fr; }
     .download-controls .control-field, .download-controls .limit-field { grid-column: auto; }
-    .list-heading { padding-left: 42px; }
+    .cart-controls { grid-template-columns: 1fr 1fr; }
     .track-row { gap: 8px; padding-left: 5px; padding-right: 5px; }
     .track-row .num { width: 24px; }
     .track-row .duration { display: none; }
