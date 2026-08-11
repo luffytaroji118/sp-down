@@ -209,6 +209,7 @@ async function loadSearchResults(query, live = false) {
                     <span class="duration">${formatDuration(r.duration_ms)}</span>
                     <button class="btn btn-ghost btn-sm search-cart-btn" data-index="${i}" title="Add to cart"><span class="btn-text">Add to cart</span><span class="btn-symbol">+</span></button>
                     <button class="btn btn-green btn-sm search-download-btn" data-index="${i}" title="Download"><span class="btn-text">Download</span><span class="btn-symbol">&darr;</span></button>
+                    <span class="status-wrap"></span>
                 </div>`;
             }).join('');
         }
@@ -731,6 +732,7 @@ function renderCart() {
             <span class="duration">${formatDuration(c.duration_ms)}</span>
             <button class="btn btn-green btn-sm cart-download-btn" data-index="${i}" title="Download"><span class="btn-text">Download</span><span class="btn-symbol">&darr;</span></button>
             <button class="btn btn-ghost btn-sm cart-remove-btn" data-index="${i}" title="Remove"><span class="btn-text">Remove</span><span class="btn-symbol">&times;</span></button>
+            <span class="status-wrap"></span>
         </div>
     `).join('');
 }
