@@ -131,7 +131,7 @@ input::placeholder { color: #657182; }
 .search-row .search-cart-btn, .search-row .search-download-btn { flex: 0 0 auto; }
 .playlist-row .playlist-cart-btn, .playlist-row .playlist-download-btn { flex: 0 0 auto; }
 .playlist-row .status-wrap { display: grid; place-items: center; width: 22px; flex: 0 0 auto; }
-.cart-list { min-height: 0; }
+.cart-list { min-height: 0; padding: 0; }
 
 .playlist-card.collapsible-card, #search-info, #playlist-info { padding: 0; overflow: hidden; }
 #search-info .collapsible-body, #playlist-info .collapsible-body { gap: 0; padding: 0; }

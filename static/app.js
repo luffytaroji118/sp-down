@@ -676,6 +676,7 @@ function addToCart(result) {
         const vid = result.video_url.split('v=').pop();
         if (vid) coverUrl = `https://i.ytimg.com/vi/${vid}/default.jpg`;
     }
+    const wasEmpty = cart.length === 0;
     cart.push({
         title: result.title,
         artists: result.artists,
@@ -686,7 +687,7 @@ function addToCart(result) {
     saveCart();
     renderCart();
     expandCart();
-    scrollToEl(cartCard);
+    if (wasEmpty) scrollToEl(cartCard);
 }
 
 function removeFromCart(pos) {
