@@ -53,6 +53,8 @@ const cartToggle = $('cart-toggle');
 const cartBody = $('cart-body');
 const playlistToggle = $('playlist-toggle');
 const playlistBody = $('playlist-body');
+const copyNamesBtn = $('copy-names-btn');
+const copyNamesFeedback = $('copy-names-feedback');
 
 let loadedTracks = [];
 let currentJobId = null;
@@ -668,6 +670,28 @@ searchToggle.addEventListener('click', () => {
 playlistToggle.addEventListener('click', () => {
     if (playlistBody.classList.contains('hidden')) expand(playlistToggle, playlistBody);
     else collapse(playlistToggle, playlistBody);
+});
+
+copyNamesBtn.addEventListener('click', async () => {
+    if (!loadedTracks.length) return;
+    const text = loadedTracks.map((t, i) => `${i + 1}. ${t.title} — ${t.artists}`).join('\n');
+    try {
+        await navigator.clipboard.writeText(text);
+        copyNamesFeedback.textContent = `Copied ${loadedTracks.length} names`;
+    } catch {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); copyNamesFeedback.textContent = `Copied ${loadedTracks.length} names`; }
+        catch { copyNamesFeedback.textContent = 'Copy failed'; }
+        document.body.removeChild(ta);
+    }
+    copyNamesFeedback.classList.add('show');
+    clearTimeout(copyNamesBtn._fbTimer);
+    copyNamesBtn._fbTimer = setTimeout(() => copyNamesFeedback.classList.remove('show'), 2000);
 });
 
 function addToCart(result) {

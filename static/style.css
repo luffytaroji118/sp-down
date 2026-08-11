@@ -139,6 +139,10 @@ input::placeholder { color: #657182; }
 .list-heading { padding: 14px 22px 9px 48px; }
 .track-list { padding: 0 22px 18px; }
 
+.copy-names-bar { display: flex; align-items: center; gap: 12px; padding: 0 22px 18px; }
+.copy-names-feedback { color: var(--accent); font-size: 12px; font-weight: 600; opacity: 0; transition: opacity .2s ease; }
+.copy-names-feedback.show { opacity: 1; }
+
 .progress-header { display: flex; justify-content: space-between; align-items: center; gap: 15px; margin-bottom: 18px; }
 .progress-header h3 { margin-top: 4px; font-size: 18px; letter-spacing: -.025em; }
 .progress-header-right { display: flex; align-items: center; gap: 15px; }
@@ -184,6 +188,7 @@ footer { margin-top: 34px; color: #667283; text-align: center; font-size: 11px; 
     .cart-controls { padding: 14px 18px 0; }
     .playlist-header { padding: 0 18px; }
     .track-list { padding: 0 18px 14px; }
+    .copy-names-bar { padding: 0 18px 14px; }
     .list-heading { padding-left: 42px; padding-right: 18px; }
     .track-row { gap: 6px; padding: 7px 8px; overflow: hidden; }
     .track-row .num { width: 18px; font-size: 10px; }
