@@ -173,14 +173,20 @@ footer { margin-top: 34px; color: #667283; text-align: center; font-size: 11px; 
 }
 
 @media (max-width: 560px) {
-    .search-row .btn-sm, .cart-row .btn-sm, .playlist-row .btn-sm { min-width: 38px; min-height: 38px; padding: 7px; gap: 0; }
+    .search-row .btn-sm, .cart-row .btn-sm, .playlist-row .btn-sm { min-width: 34px; min-height: 34px; padding: 6px; gap: 0; }
     .search-row .btn-text, .cart-row .btn-text, .playlist-row .btn-text { display: none; }
-    .search-row .btn-symbol, .cart-row .btn-symbol, .playlist-row .btn-symbol { font-size: 17px; }
+    .search-row .btn-symbol, .cart-row .btn-symbol, .playlist-row .btn-symbol { font-size: 16px; }
     .collapsible-toggle { padding: 15px 18px; }
     .collapsible-body { padding: 0 18px 18px; }
     .playlist-header { padding: 0 18px; }
     .track-list { padding: 0 18px 14px; }
     .list-heading { padding-left: 42px; padding-right: 18px; }
+    .track-row { gap: 6px; padding: 7px 8px; overflow: hidden; }
+    .track-row .num { width: 18px; font-size: 10px; }
+    .track-thumb, .track-thumb-placeholder { width: 34px; height: 34px; border-radius: 6px; }
+    .track-row .duration { font-size: 10px; flex: 0 0 auto; }
+    .playlist-row .status-wrap { width: 18px; }
+    .playlist-row .playlist-cart-btn, .playlist-row .playlist-download-btn { min-width: 32px; min-height: 32px; padding: 5px; }
 }
 
 @media (max-width: 480px) {
@@ -196,9 +202,6 @@ footer { margin-top: 34px; color: #667283; text-align: center; font-size: 11px; 
     .download-controls { grid-template-columns: 1fr; }
     .download-controls .control-field, .download-controls .limit-field { grid-column: auto; }
     .cart-controls { grid-template-columns: 1fr 1fr; }
-    .track-row { gap: 8px; padding-left: 5px; padding-right: 5px; }
-    .track-row .num { width: 24px; }
-    .track-row .duration { display: none; }
     .progress-header { align-items: flex-start; }
     .progress-header-right { gap: 8px; }
     .progress-header-right .btn { min-height: 35px; }
@@ -206,4 +209,10 @@ footer { margin-top: 34px; color: #667283; text-align: center; font-size: 11px; 
     .ready-header svg { width: 34px; height: 34px; }
     .individual-toolbar { flex-wrap: wrap; }
     .individual-toolbar .btn { width: 100%; }
+}
+
+@media (max-width: 380px) {
+    .track-thumb, .track-thumb-placeholder { display: none; }
+    .playlist-row .status-wrap { display: none; }
+    .track-row { gap: 5px; padding: 6px; }
 }
