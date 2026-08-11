@@ -7,7 +7,20 @@ import json
 import re
 import time
 from dataclasses import dataclass, asdict
+from pathlib import Path
 from typing import Optional
+
+try:
+    import pyotp
+    _HAS_PYOTP = True
+except ImportError:
+    _HAS_PYOTP = False
+
+try:
+    from curl_cffi import requests as _creq
+    _HAS_CURLCFFI = True
+except ImportError:
+    _HAS_CURLCFFI = False
 
 
 @dataclass
@@ -69,6 +82,120 @@ def is_spotify_url(url: str) -> bool:
     return bool(re.search(r"spotify\.com|spotify:", url, re.IGNORECASE))
 
 
+# ---- GraphQL pathfinder (fast, no rate-limit, gets ALL tracks) ----
+
+_GRAPHQL_CACHE = Path.home() / ".cache" / "spotapi-fast" / "cache.json"
+_FPH = "e4b2953f160e58e38ac025d79b5a9b3aceee5c4c716598e9830bfceb69faff5f"
+_CVER = "1.2.97.113.gb2fcd25e-development"
+_TOTP_V61 = [44, 55, 47, 42, 70, 40, 34, 114, 76, 74, 50, 111, 120, 97, 75, 76, 94, 102, 43, 69, 49, 120, 118, 80, 64, 78]
+_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+
+
+def _totp():
+    tr = [e ^ ((t % 33) + 9) for t, e in enumerate(_TOTP_V61)]
+    hs = "".join(str(n) for n in tr).encode().hex()
+    return pyotp.TOTP(base64.b32encode(bytes.fromhex(hs)).decode().rstrip("=")).now()
+
+
+def _graphql_bootstrap(s):
+    totp = _totp()
+    r = s.get("https://open.spotify.com/api/token",
+              params={"reason": "init", "productType": "web-player",
+                      "totp": totp, "totpVer": 61, "totpServer": totp})
+    j = r.json()
+    ct = s.post("https://clienttoken.spotify.com/v1/clienttoken",
+        json={"client_data": {"client_version": _CVER, "client_id": j["clientId"],
+              "js_sdk_data": {"device_brand": "unknown", "device_model": "unknown",
+              "os": "windows", "os_version": "NT 10.0",
+              "device_id": "0" * 32, "device_type": "computer"}}},
+        headers={"Accept": "application/json",
+                 "Content-Type": "application/json"}).json()["granted_token"]["token"]
+    return {"access_token": j["accessToken"], "client_token": ct,
+            "client_id": j["clientId"],
+            "expires_at_ms": int(j["accessTokenExpirationTimestampMs"]),
+            "client_version": _CVER, "fph": _FPH}
+
+
+def _graphql_session():
+    if _HAS_CURLCFFI:
+        return _creq.Session(impersonate="chrome131")
+    import requests
+    s = requests.Session()
+    s.headers.update({"User-Agent": _UA})
+    return s
+
+
+def _graphql_cached_token(s):
+    c = None
+    if _GRAPHQL_CACHE.exists():
+        try:
+            c = json.loads(_GRAPHQL_CACHE.read_text())
+        except Exception:
+            c = None
+    if not c or time.time() * 1000 > c["expires_at_ms"] - 30000:
+        c = _graphql_bootstrap(s)
+        _GRAPHQL_CACHE.parent.mkdir(parents=True, exist_ok=True)
+        _GRAPHQL_CACHE.write_text(json.dumps(c))
+    return c
+
+
+def _graphql_request(s, c, operation, variables):
+    ext = {"persistedQuery": {"version": 1, "sha256Hash": c["fph"]}}
+    return s.post("https://api-partner.spotify.com/pathfinder/v1/query",
+        params={"operationName": operation,
+                "variables": json.dumps(variables),
+                "extensions": json.dumps(ext)},
+        headers={"Authorization": f"Bearer {c['access_token']}",
+                 "Client-Token": c["client_token"],
+                 "Spotify-App-Version": c["client_version"],
+                 "Accept-Language": "en"})
+
+
+def _parse_track_data(d: dict, index: int) -> Track:
+    artists = ", ".join(
+        a.get("profile", {}).get("name", "")
+        for a in d.get("artists", {}).get("items", [])
+    ) or "Unknown"
+    return Track(
+        index=index,
+        title=d.get("name", "Unknown"),
+        artists=artists,
+        duration_ms=d.get("trackDuration", {}).get("totalMilliseconds", 0),
+        spotify_uri=d.get("uri", ""),
+        is_playable=d.get("playability", {}).get("playable", True),
+    )
+
+
+def _fetch_playlist_via_graphql(playlist_id: str) -> tuple[str, list[Track]]:
+    """Fetch all tracks via Spotify's internal GraphQL API (single request, no rate limit)."""
+    s = _graphql_session()
+    c = _graphql_cached_token(s)
+    variables = {"uri": f"spotify:playlist:{playlist_id}",
+                 "offset": 0, "limit": 343,
+                 "enableWatchFeedEntrypoint": False}
+    r = _graphql_request(s, c, "fetchPlaylist", variables)
+    data = r.json()
+    playlist = data["data"]["playlistV2"]
+    playlist_name = playlist.get("name", "Unknown Playlist")
+    items = playlist.get("content", {}).get("items", [])
+
+    tracks = []
+    for item in items:
+        item_data = item.get("itemV2", {}).get("data")
+        if not item_data:
+            continue
+        tracks.append(_parse_track_data(item_data, len(tracks) + 1))
+
+    print(f"[SPOTIFY] GraphQL fetched {len(tracks)} tracks", flush=True)
+    return playlist_name, tracks
+
+
+def _graphql_available() -> bool:
+    return _HAS_PYOTP
+
+
+# ---- Fallback: embed page scraping (original method) ----
+
 def _fetch_via_embed_token(playlist_id: str) -> tuple[str, list[Track]]:
     """Fetch all tracks using the access token from Spotify's embed page."""
     embed_url = f"https://open.spotify.com/embed/playlist/{playlist_id}"
@@ -89,7 +216,6 @@ def _fetch_via_embed_token(playlist_id: str) -> tuple[str, list[Track]]:
 
     data = json.loads(match.group(1))
 
-    # Get the access token from the embed page's session data
     token = (
         data.get("props", {})
         .get("pageProps", {})
@@ -99,7 +225,6 @@ def _fetch_via_embed_token(playlist_id: str) -> tuple[str, list[Track]]:
         .get("accessToken", "")
     )
 
-    # Get initial tracks from embed page
     entity = data["props"]["pageProps"]["state"]["data"]["entity"]
     playlist_name = entity.get("title", "Unknown Playlist")
     track_list = entity.get("trackList", [])
@@ -119,11 +244,9 @@ def _fetch_via_embed_token(playlist_id: str) -> tuple[str, list[Track]]:
 
     print(f"[SPOTIFY] Embed page returned {len(tracks)} tracks", flush=True)
 
-    # If we have a token, paginate to get remaining tracks
     if token and len(tracks) > 0:
         headers = {"Authorization": f"Bearer {token}"}
 
-        # Get total track count
         try:
             time.sleep(1)
             pl_req = urllib.request.Request(
@@ -192,13 +315,7 @@ def _fetch_via_embed_token(playlist_id: str) -> tuple[str, list[Track]]:
     return playlist_name, tracks
 
 
-def fetch_tracks(playlist_url: str) -> tuple[str, list[Track]]:
-    playlist_id = extract_playlist_id(playlist_url)
-    return _fetch_via_embed_token(playlist_id)
-
-
-def fetch_single_track(track_url: str) -> Track:
-    track_id = extract_track_id(track_url)
+def _fetch_single_track_via_embed(track_id: str) -> Track:
     embed_url = f"https://open.spotify.com/embed/track/{track_id}"
     req = urllib.request.Request(
         embed_url,
@@ -225,3 +342,20 @@ def fetch_single_track(track_url: str) -> Track:
         spotify_uri=entity.get("uri", ""),
         is_playable=entity.get("isPlayable", True),
     )
+
+
+# ---- Public API (GraphQL first, embed fallback) ----
+
+def fetch_tracks(playlist_url: str) -> tuple[str, list[Track]]:
+    playlist_id = extract_playlist_id(playlist_url)
+    if _graphql_available():
+        try:
+            return _fetch_playlist_via_graphql(playlist_id)
+        except Exception as e:
+            print(f"[SPOTIFY] GraphQL failed ({e}), falling back to embed", flush=True)
+    return _fetch_via_embed_token(playlist_id)
+
+
+def fetch_single_track(track_url: str) -> Track:
+    track_id = extract_track_id(track_url)
+    return _fetch_single_track_via_embed(track_id)
