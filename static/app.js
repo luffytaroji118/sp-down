@@ -603,7 +603,9 @@ function saveCart() {
 }
 
 function cartKey(r) {
-    return (r.video_url || '').split('v=').pop() || r.video_url;
+    const v = r.video_url || '';
+    if (v) return v.split('v=').pop() || v;
+    return (r.title + '|' + r.artists).toLowerCase();
 }
 
 function expandCart() {
