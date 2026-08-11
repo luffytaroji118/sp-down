@@ -204,51 +204,63 @@ def _download_audio_direct(
     progress_hook: Optional[Callable] = None,
 ) -> Optional[Path]:
     """Stream audio from PO token API + convert with ffmpeg. Skips yt-dlp extraction entirely."""
-    try:
-        stream_url = f"{AUDIO_STREAM_URL}?content_binding={video_id}"
-        print(f"[INFO] Streaming audio from API for {video_id}…", flush=True)
+    import urllib.error
+    stream_url = f"{AUDIO_STREAM_URL}?content_binding={video_id}"
+    print(f"[INFO] Streaming audio from API for {video_id}…", flush=True)
 
-        # Stream to temp file
-        tmp_path = output_path.with_suffix(".m4a")
-        req = urllib.request.Request(stream_url, headers={"User-Agent": _UA})
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            content_length = int(resp.headers.get("Content-Length", 0) or 0)
-            total = 0
-            with open(tmp_path, "wb") as f:
-                while True:
-                    chunk = resp.read(1024 * 1024)
-                    if not chunk:
-                        break
-                    f.write(chunk)
-                    total += len(chunk)
-                    if progress_hook:
-                        progress_hook({"status": "downloading", "downloaded_bytes": total, "total_bytes": content_length})
-        if progress_hook:
-            progress_hook({"status": "finished"})
+    # Retry up to 3 times for transient 500s (cold start, rate limit)
+    for attempt in range(3):
+        try:
+            tmp_path = output_path.with_suffix(".m4a")
+            req = urllib.request.Request(stream_url, headers={"User-Agent": _UA})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                content_length = int(resp.headers.get("Content-Length", 0) or 0)
+                total = 0
+                with open(tmp_path, "wb") as f:
+                    while True:
+                        chunk = resp.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        total += len(chunk)
+                        if progress_hook:
+                            progress_hook({"status": "downloading", "downloaded_bytes": total, "total_bytes": content_length})
+            if progress_hook:
+                progress_hook({"status": "finished"})
 
-        print(f"[INFO] Downloaded {total / 1048576:.1f} MB, converting to {fmt['ext']}…", flush=True)
+            print(f"[INFO] Downloaded {total / 1048576:.1f} MB, converting to {fmt['ext']}…", flush=True)
 
-        # Convert to target format with ffmpeg
-        quality_args = []
-        if fmt["codec"] == "mp3":
-            quality_args = ["-b:a", f"{fmt['quality']}k"]
-        elif fmt["codec"] == "flac":
-            quality_args = ["-c:a", "flac"]
-        elif fmt["codec"] == "m4a":
-            quality_args = ["-c:a", "aac", "-b:a", "256k"]
+            # Convert to target format with ffmpeg
+            quality_args = []
+            if fmt["codec"] == "mp3":
+                quality_args = ["-b:a", f"{fmt['quality']}k"]
+            elif fmt["codec"] == "flac":
+                quality_args = ["-c:a", "flac"]
+            elif fmt["codec"] == "m4a":
+                quality_args = ["-c:a", "aac", "-b:a", "256k"]
 
-        ffmpeg_cmd = ["ffmpeg", "-y", "-i", str(tmp_path)] + quality_args + [str(output_path)]
-        result = subprocess.run(ffmpeg_cmd, capture_output=True, timeout=60)
-        tmp_path.unlink(missing_ok=True)
+            ffmpeg_cmd = ["ffmpeg", "-y", "-i", str(tmp_path)] + quality_args + [str(output_path)]
+            result = subprocess.run(ffmpeg_cmd, capture_output=True, timeout=60)
+            tmp_path.unlink(missing_ok=True)
 
-        if output_path.exists():
-            print(f"[INFO] Done: {output_path.name} ({output_path.stat().st_size / 1048576:.1f} MB)", flush=True)
-            return output_path
-        print(f"[ERROR] ffmpeg failed: {result.stderr.decode()[-300:]}", flush=True)
-        return None
-    except Exception as e:
-        print(f"[ERROR] Audio stream download failed: {e}", flush=True)
-        return None
+            if output_path.exists():
+                print(f"[INFO] Done: {output_path.name} ({output_path.stat().st_size / 1048576:.1f} MB)", flush=True)
+                return output_path
+            print(f"[ERROR] ffmpeg failed: {result.stderr.decode()[-300:]}", flush=True)
+            return None
+        except urllib.error.HTTPError as e:
+            print(f"[WARNING] Stream attempt {attempt+1} failed: HTTP {e.code}", flush=True)
+            if tmp_path and tmp_path.exists():
+                tmp_path.unlink(missing_ok=True)
+            if attempt < 2:
+                time.sleep(1)
+                continue
+            return None
+        except Exception as e:
+            print(f"[ERROR] Audio stream download failed: {e}", flush=True)
+            if tmp_path and tmp_path.exists():
+                tmp_path.unlink(missing_ok=True)
+            return None
 
 
 def _extract_and_download(
