@@ -37,6 +37,8 @@ const searchCount = $('search-count');
 const searchList = $('search-list');
 const searchFormatSelect = $('search-format-select');
 const searchQueryLabel = $('search-query-label');
+const searchToggle = $('search-toggle');
+const searchBody = $('search-body');
 const individualBackBtn = $('individual-back-btn');
 const cartCard = $('cart-card');
 const cartList = $('cart-list');
@@ -48,6 +50,8 @@ const cartDownloadBtn = $('cart-download-btn');
 const cartClearBtn = $('cart-clear-btn');
 const cartToggle = $('cart-toggle');
 const cartBody = $('cart-body');
+const playlistToggle = $('playlist-toggle');
+const playlistBody = $('playlist-body');
 
 let loadedTracks = [];
 let currentJobId = null;
@@ -150,6 +154,7 @@ async function loadPlaylist(url) {
         `).join('');
 
         playlistInfo.classList.remove('hidden');
+        expand(playlistToggle, playlistBody);
     } catch (e) {
         showError(e.message);
     } finally {
@@ -189,6 +194,7 @@ async function loadSearchResults(query) {
             `).join('');
         }
         searchInfo.classList.remove('hidden');
+        expand(searchToggle, searchBody);
     } catch (e) {
         showError(e.message);
     } finally {
@@ -536,6 +542,18 @@ function toggleCart() {
 }
 
 cartToggle.addEventListener('click', toggleCart);
+
+function expand(el, body) { body.classList.remove('hidden'); el.setAttribute('aria-expanded', 'true'); }
+function collapse(el, body) { body.classList.add('hidden'); el.setAttribute('aria-expanded', 'false'); }
+
+searchToggle.addEventListener('click', () => {
+    if (searchBody.classList.contains('hidden')) expand(searchToggle, searchBody);
+    else collapse(searchToggle, searchBody);
+});
+playlistToggle.addEventListener('click', () => {
+    if (playlistBody.classList.contains('hidden')) expand(playlistToggle, playlistBody);
+    else collapse(playlistToggle, playlistBody);
+});
 
 function addToCart(result) {
     if (cart.some(c => cartKey(c) === cartKey(result))) {
