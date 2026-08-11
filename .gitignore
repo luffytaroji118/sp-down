@@ -6,3 +6,4 @@ downloads_temp/
 *.log
 test_search.py
 yt_cookies.txt
+test_speed.py
