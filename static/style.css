@@ -121,17 +121,17 @@ input::placeholder { color: #657182; }
 .collapsible-body { padding: 0 22px 22px; display: flex; flex-direction: column; gap: 14px; }
 
 .cart-card { padding: 0; overflow: hidden; }
-.cart-body { padding: 0 22px 22px; display: flex; flex-direction: column; gap: 14px; }
+.cart-body { padding: 0; display: flex; flex-direction: column; gap: 14px; }
 .cart-step-icon { font-size: 13px; }
 .cart-count-badge { display: grid; place-items: center; min-width: 26px; height: 26px; padding: 0 8px; border-radius: 13px; background: rgba(184, 243, 74, .14); color: var(--accent); font-size: 12px; font-weight: 700; }
 .cart-chevron { color: var(--text-sub); font-size: 13px; transition: transform .2s ease; }
 .collapsible-toggle[aria-expanded="true"] .cart-chevron { transform: rotate(180deg); }
-.cart-controls { grid-template-columns: repeat(2, minmax(100px, 1fr)) auto auto; }
+.cart-controls { grid-template-columns: repeat(2, minmax(100px, 1fr)) auto auto; padding: 14px 22px 0; }
 .cart-row .cart-remove-btn, .cart-row .cart-download-btn { flex: 0 0 auto; }
 .search-row .search-cart-btn, .search-row .search-download-btn { flex: 0 0 auto; }
 .playlist-row .playlist-cart-btn, .playlist-row .playlist-download-btn { flex: 0 0 auto; }
 .status-wrap { display: grid; place-items: center; width: 22px; flex: 0 0 auto; }
-.cart-list { min-height: 0; padding: 0; }
+.cart-list { min-height: 0; }
 
 .playlist-card.collapsible-card, #search-info, #playlist-info { padding: 0; overflow: hidden; }
 #search-info .collapsible-body, #playlist-info .collapsible-body { gap: 0; padding: 0; }
@@ -180,7 +180,8 @@ footer { margin-top: 34px; color: #667283; text-align: center; font-size: 11px; 
     .search-row .btn-text, .cart-row .btn-text, .playlist-row .btn-text { display: none; }
     .search-row .btn-symbol, .cart-row .btn-symbol, .playlist-row .btn-symbol { font-size: 16px; }
     .collapsible-toggle { padding: 15px 18px; }
-    .collapsible-body, .cart-body { padding: 0 18px 18px; }
+    .collapsible-body { padding: 0 18px 18px; }
+    .cart-controls { padding: 14px 18px 0; }
     .playlist-header { padding: 0 18px; }
     .track-list { padding: 0 18px 14px; }
     .list-heading { padding-left: 42px; padding-right: 18px; }
