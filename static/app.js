@@ -38,6 +38,14 @@ const searchList = $('search-list');
 const searchFormatSelect = $('search-format-select');
 const searchQueryLabel = $('search-query-label');
 const individualBackBtn = $('individual-back-btn');
+const cartCard = $('cart-card');
+const cartList = $('cart-list');
+const cartCount = $('cart-count');
+const cartSubtitle = $('cart-subtitle');
+const cartFormatSelect = $('cart-format-select');
+const cartModeSelect = $('cart-mode-select');
+const cartDownloadBtn = $('cart-download-btn');
+const cartClearBtn = $('cart-clear-btn');
 
 let loadedTracks = [];
 let currentJobId = null;
@@ -46,6 +54,7 @@ let lastInputMode = 'playlist';
 let pollTimer = null;
 let elapsedTimer = null;
 let downloadStartTime = null;
+let cart = loadCart();
 
 async function api(path, body) {
     const resp = await fetch(path, {
@@ -172,6 +181,7 @@ async function loadSearchResults(query) {
                         <div class="artists">${escapeHtml(r.artists)}</div>
                     </div>
                     <span class="duration">${formatDuration(r.duration_ms)}</span>
+                    <button class="btn btn-ghost btn-sm search-cart-btn" data-index="${i}"><span>Add to cart</span><span>+</span></button>
                     <button class="btn btn-green btn-sm search-download-btn" data-index="${i}"><span>Download</span><span>↓</span></button>
                 </div>
             `).join('');
@@ -187,6 +197,19 @@ async function loadSearchResults(query) {
 }
 
 searchList.addEventListener('click', async (e) => {
+    const cartBtn = e.target.closest('.search-cart-btn');
+    if (cartBtn) {
+        const idx = parseInt(cartBtn.dataset.index, 10);
+        const result = currentSearchResults[idx];
+        if (result) {
+            addToCart(result);
+            const orig = cartBtn.firstElementChild.textContent;
+            setBtnLabel(cartBtn, 'Added');
+            cartBtn.disabled = true;
+            setTimeout(() => { setBtnLabel(cartBtn, orig); cartBtn.disabled = false; }, 900);
+        }
+        return;
+    }
     const btn = e.target.closest('.search-download-btn');
     if (!btn) return;
     const idx = parseInt(btn.dataset.index, 10);
@@ -437,6 +460,8 @@ function backToPrevious() {
     stoppedSection.classList.add('hidden');
     if (lastInputMode === 'search') {
         searchInfo.classList.remove('hidden');
+    } else if (lastInputMode === 'cart') {
+        cartCard.classList.remove('hidden');
     } else {
         playlistInfo.classList.remove('hidden');
     }
@@ -461,3 +486,115 @@ urlInput.addEventListener('keypress', (e) => {
 });
 
 urlInput.addEventListener('input', clearError);
+
+// ---- Cart ----
+const CART_KEY = 'sounddrop_cart';
+
+function loadCart() {
+    try {
+        const raw = localStorage.getItem(CART_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed : [];
+    } catch { return []; }
+}
+
+function saveCart() {
+    try { localStorage.setItem(CART_KEY, JSON.stringify(cart)); } catch {}
+}
+
+function cartKey(r) {
+    return (r.video_url || '').split('v=').pop() || r.video_url;
+}
+
+function addToCart(result) {
+    if (cart.some(c => cartKey(c) === cartKey(result))) {
+        inputError.textContent = 'Already in cart';
+        setTimeout(clearError, 1200);
+        return;
+    }
+    cart.push({
+        title: result.title,
+        artists: result.artists,
+        video_url: result.video_url,
+        duration_ms: result.duration_ms || 0,
+    });
+    saveCart();
+    renderCart();
+}
+
+function removeFromCart(pos) {
+    cart.splice(pos, 1);
+    saveCart();
+    renderCart();
+}
+
+function clearCart() {
+    cart = [];
+    saveCart();
+    renderCart();
+}
+
+function renderCart() {
+    cartCount.textContent = `${cart.length} ${cart.length === 1 ? 'track' : 'tracks'}`;
+    cartDownloadBtn.disabled = cart.length === 0;
+    cartClearBtn.disabled = cart.length === 0;
+    cartSubtitle.textContent = cart.length === 0
+        ? 'Search a song and add it here to download all at once later'
+        : 'Download all tracks together, or keep adding more';
+
+    if (cart.length === 0) {
+        cartList.innerHTML = '<div class="search-empty">Your cart is empty. Search above and tap “Add to cart”.</div>';
+        return;
+    }
+    cartList.innerHTML = cart.map((c, i) => `
+        <div class="track-row cart-row">
+            <span class="num">${i + 1}</span>
+            <div class="info">
+                <div class="title">${escapeHtml(c.title)}</div>
+                <div class="artists">${escapeHtml(c.artists)}</div>
+            </div>
+            <span class="duration">${formatDuration(c.duration_ms)}</span>
+            <button class="btn btn-ghost btn-sm cart-remove-btn" data-index="${i}"><span>Remove</span><span>&times;</span></button>
+        </div>
+    `).join('');
+}
+
+cartList.addEventListener('click', (e) => {
+    const btn = e.target.closest('.cart-remove-btn');
+    if (!btn) return;
+    removeFromCart(parseInt(btn.dataset.index, 10));
+});
+
+cartClearBtn.addEventListener('click', () => {
+    if (cart.length && !confirm(`Remove all ${cart.length} tracks from the cart?`)) return;
+    clearCart();
+});
+
+cartDownloadBtn.addEventListener('click', async () => {
+    if (cart.length === 0) return;
+    clearError();
+    cartDownloadBtn.disabled = true;
+    setBtnLabel(cartDownloadBtn, 'Preparing...');
+
+    try {
+        const data = await api('/api/download_cart', {
+            tracks: cart,
+            format: cartFormatSelect.value,
+            mode: cartModeSelect.value,
+            name: 'Cart',
+        });
+        currentJobId = data.job_id;
+        lastInputMode = 'cart';
+        setBtnLabel(cartDownloadBtn, 'Download cart');
+        cartDownloadBtn.disabled = false;
+        progressSection.classList.remove('hidden');
+        stopBtn.disabled = false;
+        pollStatus(data.job_id);
+    } catch (e) {
+        showError(e.message);
+        setBtnLabel(cartDownloadBtn, 'Download cart');
+        cartDownloadBtn.disabled = false;
+    }
+});
+
+renderCart();

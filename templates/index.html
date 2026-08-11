@@ -37,6 +37,30 @@
             <div id="input-error" class="error-msg"></div>
         </div>
 
+        <div id="cart-card" class="card cart-card">
+            <div class="section-label"><span class="step-number cart-step-icon">&#911;</span><div><strong>Your cart</strong><small id="cart-subtitle">Search a song and add it here to download all at once later</small></div></div>
+            <div class="cart-header">
+                <div>
+                    <h2>Cart</h2>
+                    <span id="cart-count" class="track-count">0 tracks</span>
+                </div>
+                <div class="download-controls">
+                    <label class="control-field"><span>Audio format</span><select id="cart-format-select" class="select">
+                        {% for fmt in formats %}
+                        <option value="{{ fmt.key }}">{{ fmt.label }}</option>
+                        {% endfor %}
+                    </select></label>
+                    <label class="control-field"><span>Delivery</span><select id="cart-mode-select" class="select" title="How to download">
+                        <option value="zip">As ZIP file</option>
+                        <option value="individual">Separate files</option>
+                    </select></label>
+                    <button id="cart-clear-btn" class="btn btn-ghost btn-sm"><span>Clear</span></button>
+                    <button id="cart-download-btn" class="btn btn-green"><span>Download cart</span><span>&darr;</span></button>
+                </div>
+            </div>
+            <div id="cart-list" class="track-list cart-list"></div>
+        </div>
+
         <div id="playlist-info" class="card playlist-card hidden">
             <div class="section-label"><span class="step-number">02</span><div><strong>Choose how to download</strong><small id="playlist-name-label">Your tracks are ready to go</small></div></div>
             <div class="playlist-header">

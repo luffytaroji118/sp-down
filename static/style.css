@@ -107,6 +107,14 @@ input::placeholder { color: #657182; }
 .search-empty { padding: 28px 12px; text-align: center; color: var(--text-sub); font-size: 13px; }
 .individual-toolbar { gap: 10px; }
 
+.cart-card { padding: 22px; }
+.cart-step-icon { font-size: 13px; }
+.cart-header { display: flex; justify-content: space-between; align-items: flex-end; gap: 22px; margin-bottom: 22px; }
+.cart-header h2 { margin-bottom: 6px; font-size: 23px; letter-spacing: -.03em; }
+.cart-card .download-controls { grid-template-columns: repeat(2, minmax(100px, 1fr)) auto auto; }
+.cart-row .cart-remove-btn { flex: 0 0 auto; }
+.search-row .search-cart-btn { flex: 0 0 auto; }
+
 .progress-header { display: flex; justify-content: space-between; align-items: center; gap: 15px; margin-bottom: 18px; }
 .progress-header h3 { margin-top: 4px; font-size: 18px; letter-spacing: -.025em; }
 .progress-header-right { display: flex; align-items: center; gap: 15px; }

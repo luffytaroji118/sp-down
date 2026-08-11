@@ -589,3 +589,58 @@ def download_playlist(
 
     shutil.rmtree(output_dir, ignore_errors=True)
     return zip_path
+
+
+def download_cart(
+    items: list[dict],
+    output_dir: Path,
+    fmt_key: str,
+    on_track_start: Callable[[int, dict], None] = lambda i, t: None,
+    on_track_done: Callable[[int, dict, Optional[Path]], None] = lambda i, t, p: None,
+    stop_event: Optional[threading.Event] = None,
+    max_workers: int = MAX_WORKERS,
+    pack_zip: bool = True,
+    on_progress: Optional[Callable[[int, dict], None]] = None,
+) -> Optional[Path]:
+    """Download a list of {video_url, title, artists, duration_ms} items in parallel and zip them."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    def _worker(item):
+        if stop_event and stop_event.is_set():
+            return item["index"], None
+        on_track_start(item["index"], item)
+        hook = (lambda d: on_progress(item["index"], d)) if on_progress else None
+        result = download_track_by_url(
+            item["video_url"], item["title"], item["artists"],
+            output_dir, fmt_key, item["index"], progress_hook=hook,
+        )
+        return item["index"], result
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(_worker, it): it for it in items}
+        for future in as_completed(futures):
+            item = futures[future]
+            if stop_event and stop_event.is_set():
+                executor.shutdown(wait=False, cancel_futures=True)
+                break
+            try:
+                idx, result = future.result()
+                on_track_done(idx, item, result)
+            except Exception as e:
+                print(f"[ERROR] Cart worker error for item {item['index']}: {e}", flush=True)
+                on_track_done(item["index"], item, None)
+
+    if stop_event and stop_event.is_set():
+        return None
+
+    if not pack_zip:
+        return output_dir
+
+    zip_path = output_dir.parent / f"{output_dir.name}.zip"
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        for f in sorted(output_dir.iterdir()):
+            if f.is_file():
+                zf.write(f, f.name)
+
+    shutil.rmtree(output_dir, ignore_errors=True)
+    return zip_path
