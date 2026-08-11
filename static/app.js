@@ -134,10 +134,9 @@ async function loadPlaylist(url) {
     hideResultCards();
 
     try {
-        const limitVal = document.getElementById('limit-input').value;
         const data = await api('/api/playlist', {
             url,
-            limit: limitVal ? parseInt(limitVal) : null,
+            limit: null,
         });
         loadedTracks = data.tracks;
         playlistName.textContent = data.name;
@@ -152,7 +151,7 @@ async function loadPlaylist(url) {
         }
 
         trackList.innerHTML = data.tracks.map(t => `
-            <div class="track-row" id="track-${t.index - 1}">
+            <div class="track-row playlist-row" id="track-${t.index - 1}" data-index="${t.index - 1}">
                 <span class="num">${t.index}</span>
                 ${t.cover_url ? `<img class="track-thumb" src="${t.cover_url}" alt="" loading="lazy">` : '<span class="track-thumb-placeholder"></span>'}
                 <div class="info">
@@ -160,7 +159,9 @@ async function loadPlaylist(url) {
                     <div class="artists">${escapeHtml(t.artists)}</div>
                 </div>
                 <span class="duration">${formatDuration(t.duration_ms)}</span>
-                ${statusIcon(null)}
+                <button class="btn btn-ghost btn-sm playlist-cart-btn" data-index="${t.index - 1}" title="Add to cart"><span class="btn-text">Add to cart</span><span class="btn-symbol">+</span></button>
+                <button class="btn btn-green btn-sm playlist-download-btn" data-index="${t.index - 1}" title="Download"><span class="btn-text">Download</span><span class="btn-symbol">&darr;</span></button>
+                <span class="status-wrap">${statusIcon(null)}</span>
             </div>
         `).join('');
 
@@ -265,6 +266,49 @@ searchList.addEventListener('click', async (e) => {
     }
 });
 
+trackList.addEventListener('click', async (e) => {
+    const cartBtn = e.target.closest('.playlist-cart-btn');
+    if (cartBtn) {
+        const idx = parseInt(cartBtn.dataset.index, 10);
+        const t = loadedTracks[idx];
+        if (!t) return;
+        addToCart({ title: t.title, artists: t.artists, video_url: '', duration_ms: t.duration_ms });
+        const orig = cartBtn.querySelector('.btn-text') ? cartBtn.firstElementChild.textContent : '';
+        setBtnLabel(cartBtn, 'Added');
+        cartBtn.disabled = true;
+        setTimeout(() => { if (orig) setBtnLabel(cartBtn, orig); cartBtn.disabled = false; }, 900);
+        return;
+    }
+    const dlBtn = e.target.closest('.playlist-download-btn');
+    if (!dlBtn) return;
+    const idx = parseInt(dlBtn.dataset.index, 10);
+    const t = loadedTracks[idx];
+    if (!t) return;
+    clearError();
+    dlBtn.disabled = true;
+    setBtnLabel(dlBtn, 'Starting...');
+
+    try {
+        const data = await api('/api/download_track_by_name', {
+            title: t.title,
+            artists: t.artists,
+            format: formatSelect.value,
+        });
+        currentJobId = data.job_id;
+        setBtnLabel(dlBtn, 'Download');
+        dlBtn.disabled = false;
+        playlistInfo.classList.add('hidden');
+        progressSection.classList.remove('hidden');
+        stopBtn.disabled = false;
+        scrollToEl(progressSection);
+        pollStatus(data.job_id);
+    } catch (err) {
+        showError(err.message);
+        setBtnLabel(dlBtn, 'Download');
+        dlBtn.disabled = false;
+    }
+});
+
 downloadBtn.addEventListener('click', async () => {
     if (loadedTracks.length === 0) return;
     clearError();
@@ -272,12 +316,11 @@ downloadBtn.addEventListener('click', async () => {
     setBtnLabel(downloadBtn, 'Preparing...');
 
     try {
-        const limitVal = document.getElementById('limit-input').value;
         const data = await api('/api/download', {
             url: urlInput.value.trim(),
             format: formatSelect.value,
             mode: modeSelect.value,
-            limit: limitVal ? parseInt(limitVal) : null,
+            limit: null,
         });
         currentJobId = data.job_id;
         setBtnLabel(downloadBtn, 'Start download');

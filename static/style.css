@@ -126,7 +126,9 @@ input::placeholder { color: #657182; }
 .collapsible-toggle[aria-expanded="true"] .cart-chevron { transform: rotate(180deg); }
 .cart-controls { grid-template-columns: repeat(2, minmax(100px, 1fr)) auto auto; }
 .cart-row .cart-remove-btn { flex: 0 0 auto; }
-.search-row .search-cart-btn { flex: 0 0 auto; }
+.search-row .search-cart-btn, .search-row .search-download-btn { flex: 0 0 auto; }
+.playlist-row .playlist-cart-btn, .playlist-row .playlist-download-btn { flex: 0 0 auto; }
+.playlist-row .status-wrap { display: grid; place-items: center; width: 22px; flex: 0 0 auto; }
 
 .playlist-card.collapsible-card, #search-info, #playlist-info { padding: 0; overflow: hidden; }
 #search-info .collapsible-body, #playlist-info .collapsible-body { gap: 0; }
@@ -171,9 +173,9 @@ footer { margin-top: 34px; color: #667283; text-align: center; font-size: 11px; 
 }
 
 @media (max-width: 560px) {
-    .search-row .btn-sm, .cart-row .btn-sm { min-width: 38px; min-height: 38px; padding: 7px; gap: 0; }
-    .search-row .btn-text, .cart-row .btn-text { display: none; }
-    .search-row .btn-symbol, .cart-row .btn-symbol { font-size: 17px; }
+    .search-row .btn-sm, .cart-row .btn-sm, .playlist-row .btn-sm { min-width: 38px; min-height: 38px; padding: 7px; gap: 0; }
+    .search-row .btn-text, .cart-row .btn-text, .playlist-row .btn-text { display: none; }
+    .search-row .btn-symbol, .cart-row .btn-symbol, .playlist-row .btn-symbol { font-size: 17px; }
     .collapsible-toggle { padding: 15px 18px; }
     .collapsible-body { padding: 0 18px 18px; }
     .playlist-header { padding: 0 18px; }

@@ -602,7 +602,7 @@ def download_cart(
     pack_zip: bool = True,
     on_progress: Optional[Callable[[int, dict], None]] = None,
 ) -> Optional[Path]:
-    """Download a list of {video_url, title, artists, duration_ms} items in parallel and zip them."""
+    """Download cart items. Items with video_url download directly; items without are resolved via YouTube search."""
     output_dir.mkdir(parents=True, exist_ok=True)
 
     def _worker(item):
@@ -610,10 +610,19 @@ def download_cart(
             return item["index"], None
         on_track_start(item["index"], item)
         hook = (lambda d: on_progress(item["index"], d)) if on_progress else None
-        result = download_track_by_url(
-            item["video_url"], item["title"], item["artists"],
-            output_dir, fmt_key, item["index"], progress_hook=hook,
-        )
+        video_url = item.get("video_url", "")
+        if video_url:
+            result = download_track_by_url(
+                video_url, item["title"], item["artists"],
+                output_dir, fmt_key, item["index"], progress_hook=hook,
+            )
+        else:
+            track = Track(
+                index=item["index"], title=item["title"], artists=item["artists"],
+                duration_ms=item.get("duration_ms", 0), spotify_uri="",
+                is_playable=True, cover_url=None,
+            )
+            result = download_track(track, output_dir, fmt_key, progress_hook=hook)
         return item["index"], result
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
