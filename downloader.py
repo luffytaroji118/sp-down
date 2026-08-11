@@ -269,7 +269,7 @@ def _extract_and_download(
     fmt: dict,
     progress_hook: Optional[Callable] = None,
 ) -> bool:
-    """Extract + download. Direct with PO token + cookies first, proxy fallback."""
+    """Extract + download. Direct with PO token + cookies; no proxy fallback."""
     postprocessors = [
         {"key": "FFmpegExtractAudio", "preferredcodec": fmt["codec"], "preferredquality": fmt["quality"]},
         {"key": "FFmpegMetadata"},
@@ -289,32 +289,6 @@ def _extract_and_download(
         if po_token:
             extractor_args["youtube"]["po_token"] = [f"gvs:{po_token}"]
         opts["extractor_args"] = extractor_args
-        opts.update(_download_opts())
-        opts.update({
-            "format": f"ba[abr<={AUDIO_MAX_ABR}]/bestaudio/best",
-            "noplaylist": True,
-            "no_progress": True,
-            "outtmpl": output_template,
-            "postprocessors": postprocessors,
-        })
-        if progress_hook:
-            opts["progress_hooks"] = [progress_hook]
-        return opts
-
-    def _build_proxy_opts() -> dict:
-        """Proxy download: tv/android_vr clients, no PO token needed."""
-        opts = {
-            "quiet": True,
-            "no_warnings": True,
-            "geo_bypass": True,
-            "socket_timeout": 10,
-            "proxy": PROXY_URL,
-        }
-        opts["extractor_args"] = {
-            "youtube": {
-                "player_client": ["tv", "android_vr"],
-            }
-        }
         opts.update(_download_opts())
         opts.update({
             "format": f"ba[abr<={AUDIO_MAX_ABR}]/bestaudio/best",
@@ -349,26 +323,16 @@ def _extract_and_download(
                     ydl.download([video_url])
                 return True
             except Exception as e:
-                print(f"[INFO] PO token direct failed ({e}), falling back to proxy…", flush=True)
+                print(f"[INFO] PO token direct failed ({e})…", flush=True)
 
-    # Attempt 3: Proxy download (no PO token, tv/android_vr clients)
-    if not PROXY_URL:
-        print("[INFO] No proxy configured — downloading directly…", flush=True)
-        try:
-            with yt_dlp.YoutubeDL(_build_direct_opts()) as ydl:
-                ydl.download([video_url])
-            return True
-        except Exception as e:
-            print(f"[ERROR] Download failed: {e}", flush=True)
-            return False
-
+    # Attempt 3: Direct download without PO token (web client + cookies)
     try:
-        print("[INFO] Downloading via proxy…", flush=True)
-        with yt_dlp.YoutubeDL(_build_proxy_opts()) as ydl:
+        print("[INFO] Trying direct download…", flush=True)
+        with yt_dlp.YoutubeDL(_build_direct_opts()) as ydl:
             ydl.download([video_url])
         return True
     except Exception as e:
-        print(f"[ERROR] Proxy download failed: {e}", flush=True)
+        print(f"[ERROR] Download failed: {e}", flush=True)
         return False
 
 
