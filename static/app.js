@@ -6,6 +6,7 @@ const inputError = $('input-error');
 const playlistInfo = $('playlist-info');
 const playlistName = $('playlist-name');
 const playlistNameLabel = $('playlist-name-label');
+const playlistCover = $('playlist-cover');
 const trackCount = $('track-count');
 const trackList = $('track-list');
 const formatSelect = $('format-select');
@@ -143,9 +144,17 @@ async function loadPlaylist(url) {
         playlistNameLabel.textContent = 'Select a format and delivery method below';
         trackCount.textContent = `${data.total} tracks`;
 
+        if (data.cover_url) {
+            playlistCover.src = data.cover_url;
+            playlistCover.classList.remove('hidden');
+        } else {
+            playlistCover.classList.add('hidden');
+        }
+
         trackList.innerHTML = data.tracks.map(t => `
             <div class="track-row" id="track-${t.index - 1}">
                 <span class="num">${t.index}</span>
+                ${t.cover_url ? `<img class="track-thumb" src="${t.cover_url}" alt="" loading="lazy">` : '<span class="track-thumb-placeholder"></span>'}
                 <div class="info">
                     <div class="title">${escapeHtml(t.title)}</div>
                     <div class="artists">${escapeHtml(t.artists)}</div>

@@ -84,10 +84,14 @@
                 </div>
             </button>
             <div id="playlist-body" class="collapsible-body">
-                <div class="playlist-header">
+            <div class="playlist-header">
+                <div class="playlist-title-wrap">
+                    <img id="playlist-cover" class="playlist-cover hidden" alt="">
                     <div>
                         <h2 id="playlist-name"></h2>
+                        <span id="track-count" class="track-count"></span>
                     </div>
+                </div>
                     <div class="download-controls">
                         <label class="control-field"><span>Audio format</span><select id="format-select" class="select">
                             {% for fmt in formats %}

@@ -31,6 +31,7 @@ class Track:
     duration_ms: int
     spotify_uri: str
     is_playable: bool
+    cover_url: Optional[str] = None
 
     @property
     def duration_str(self) -> str:
@@ -156,6 +157,11 @@ def _parse_track_data(d: dict, index: int) -> Track:
         a.get("profile", {}).get("name", "")
         for a in d.get("artists", {}).get("items", [])
     ) or "Unknown"
+    cover_url = None
+    sources = d.get("albumOfTrack", {}).get("coverArt", {}).get("sources", [])
+    if sources:
+        small = min(sources, key=lambda x: x.get("width", 9999))
+        cover_url = small.get("url")
     return Track(
         index=index,
         title=d.get("name", "Unknown"),
@@ -163,10 +169,11 @@ def _parse_track_data(d: dict, index: int) -> Track:
         duration_ms=d.get("trackDuration", {}).get("totalMilliseconds", 0),
         spotify_uri=d.get("uri", ""),
         is_playable=d.get("playability", {}).get("playable", True),
+        cover_url=cover_url,
     )
 
 
-def _fetch_playlist_via_graphql(playlist_id: str) -> tuple[str, list[Track]]:
+def _fetch_playlist_via_graphql(playlist_id: str) -> tuple[str, Optional[str], list[Track]]:
     """Fetch all tracks via Spotify's internal GraphQL API (single request, no rate limit)."""
     s = _graphql_session()
     c = _graphql_cached_token(s)
@@ -177,8 +184,15 @@ def _fetch_playlist_via_graphql(playlist_id: str) -> tuple[str, list[Track]]:
     data = r.json()
     playlist = data["data"]["playlistV2"]
     playlist_name = playlist.get("name", "Unknown Playlist")
-    items = playlist.get("content", {}).get("items", [])
 
+    cover_url = None
+    image_items = playlist.get("images", {}).get("items", [])
+    if image_items:
+        sources = image_items[0].get("sources", [])
+        if sources:
+            cover_url = max(sources, key=lambda x: x.get("width", 0)).get("url")
+
+    items = playlist.get("content", {}).get("items", [])
     tracks = []
     for item in items:
         item_data = item.get("itemV2", {}).get("data")
@@ -187,7 +201,7 @@ def _fetch_playlist_via_graphql(playlist_id: str) -> tuple[str, list[Track]]:
         tracks.append(_parse_track_data(item_data, len(tracks) + 1))
 
     print(f"[SPOTIFY] GraphQL fetched {len(tracks)} tracks", flush=True)
-    return playlist_name, tracks
+    return playlist_name, cover_url, tracks
 
 
 def _graphql_available() -> bool:
@@ -196,7 +210,7 @@ def _graphql_available() -> bool:
 
 # ---- Fallback: embed page scraping (original method) ----
 
-def _fetch_via_embed_token(playlist_id: str) -> tuple[str, list[Track]]:
+def _fetch_via_embed_token(playlist_id: str) -> tuple[str, Optional[str], list[Track]]:
     """Fetch all tracks using the access token from Spotify's embed page."""
     embed_url = f"https://open.spotify.com/embed/playlist/{playlist_id}"
     req = urllib.request.Request(
@@ -312,7 +326,7 @@ def _fetch_via_embed_token(playlist_id: str) -> tuple[str, list[Track]]:
         except Exception as e:
             print(f"[SPOTIFY] Pagination error: {e}, using {len(tracks)} embed tracks", flush=True)
 
-    return playlist_name, tracks
+    return playlist_name, None, tracks
 
 
 def _fetch_single_track_via_embed(track_id: str) -> Track:
@@ -346,7 +360,7 @@ def _fetch_single_track_via_embed(track_id: str) -> Track:
 
 # ---- Public API (GraphQL first, embed fallback) ----
 
-def fetch_tracks(playlist_url: str) -> tuple[str, list[Track]]:
+def fetch_tracks(playlist_url: str) -> tuple[str, Optional[str], list[Track]]:
     playlist_id = extract_playlist_id(playlist_url)
     if _graphql_available():
         try:

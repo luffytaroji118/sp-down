@@ -80,8 +80,12 @@ input::placeholder { color: #657182; }
 .hidden { display: none !important; }
 
 .playlist-header { display: flex; justify-content: space-between; align-items: flex-end; gap: 22px; margin-bottom: 22px; }
+.playlist-title-wrap { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.playlist-cover { width: 64px; height: 64px; border-radius: 12px; object-fit: cover; flex: 0 0 auto; box-shadow: 0 6px 18px rgba(0,0,0,.3); }
 .playlist-header h2 { max-width: 300px; margin-bottom: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 23px; letter-spacing: -.03em; }
 .track-count { color: var(--text-sub); font-size: 12px; }
+.track-thumb { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex: 0 0 auto; }
+.track-thumb-placeholder { width: 40px; height: 40px; border-radius: 8px; flex: 0 0 auto; background: rgba(255,255,255,.05); }
 .download-controls { display: grid; grid-template-columns: repeat(3, minmax(100px, 1fr)) auto; align-items: end; gap: 9px; width: min(100%, 590px); }
 .control-field { display: grid; gap: 6px; min-width: 0; }
 .control-field > span { color: var(--text-sub); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }

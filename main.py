@@ -54,12 +54,14 @@ async def get_playlist(data: dict):
             track = await asyncio.to_thread(fetch_single_track, url)
             tracks = [track]
             playlist_name = track.title
+            cover_url = track.cover_url
         else:
-            playlist_name, tracks = await asyncio.to_thread(fetch_tracks, url)
+            playlist_name, cover_url, tracks = await asyncio.to_thread(fetch_tracks, url)
         if limit and isinstance(limit, int) and limit > 0:
             tracks = tracks[:limit]
         return {
             "name": playlist_name,
+            "cover_url": cover_url,
             "total": len(tracks),
             "tracks": [t.to_dict() for t in tracks],
         }
@@ -93,7 +95,7 @@ async def start_download(data: dict):
         raise HTTPException(400, "Invalid mode")
 
     try:
-        playlist_name, tracks = await asyncio.to_thread(fetch_tracks, url)
+        playlist_name, _cover_url, tracks = await asyncio.to_thread(fetch_tracks, url)
     except Exception as e:
         raise HTTPException(400, str(e))
 
