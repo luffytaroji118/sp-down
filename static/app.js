@@ -46,6 +46,8 @@ const cartFormatSelect = $('cart-format-select');
 const cartModeSelect = $('cart-mode-select');
 const cartDownloadBtn = $('cart-download-btn');
 const cartClearBtn = $('cart-clear-btn');
+const cartToggle = $('cart-toggle');
+const cartBody = $('cart-body');
 
 let loadedTracks = [];
 let currentJobId = null;
@@ -232,6 +234,7 @@ searchList.addEventListener('click', async (e) => {
         searchInfo.classList.add('hidden');
         progressSection.classList.remove('hidden');
         stopBtn.disabled = false;
+        scrollToEl(progressSection);
         pollStatus(data.job_id);
     } catch (err) {
         showError(err.message);
@@ -260,6 +263,7 @@ downloadBtn.addEventListener('click', async () => {
         playlistInfo.classList.add('hidden');
         progressSection.classList.remove('hidden');
         stopBtn.disabled = false;
+        scrollToEl(progressSection);
         pollStatus(data.job_id);
     } catch (e) {
         showError(e.message);
@@ -320,6 +324,10 @@ function pollStatus(jobId) {
                 showError(data.error || 'Download failed');
                 resetDownloadBtn();
                 progressSection.classList.add('hidden');
+                if (lastInputMode === 'cart') {
+                    cartCard.classList.remove('hidden');
+                    scrollToEl(cartCard);
+                }
             } else if (data.status === 'stopped') {
                 clearInterval(pollTimer);
                 stopElapsedTimer();
@@ -462,6 +470,8 @@ function backToPrevious() {
         searchInfo.classList.remove('hidden');
     } else if (lastInputMode === 'cart') {
         cartCard.classList.remove('hidden');
+        collapseCart();
+        scrollToEl(cartCard);
     } else {
         playlistInfo.classList.remove('hidden');
     }
@@ -487,6 +497,10 @@ urlInput.addEventListener('keypress', (e) => {
 
 urlInput.addEventListener('input', clearError);
 
+function scrollToEl(el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 // ---- Cart ----
 const CART_KEY = 'sounddrop_cart';
 
@@ -506,6 +520,23 @@ function cartKey(r) {
     return (r.video_url || '').split('v=').pop() || r.video_url;
 }
 
+function expandCart() {
+    cartBody.classList.remove('hidden');
+    cartToggle.setAttribute('aria-expanded', 'true');
+}
+
+function collapseCart() {
+    cartBody.classList.add('hidden');
+    cartToggle.setAttribute('aria-expanded', 'false');
+}
+
+function toggleCart() {
+    if (cartBody.classList.contains('hidden')) expandCart();
+    else collapseCart();
+}
+
+cartToggle.addEventListener('click', toggleCart);
+
 function addToCart(result) {
     if (cart.some(c => cartKey(c) === cartKey(result))) {
         inputError.textContent = 'Already in cart';
@@ -520,6 +551,8 @@ function addToCart(result) {
     });
     saveCart();
     renderCart();
+    expandCart();
+    scrollToEl(cartCard);
 }
 
 function removeFromCart(pos) {
@@ -532,15 +565,16 @@ function clearCart() {
     cart = [];
     saveCart();
     renderCart();
+    collapseCart();
 }
 
 function renderCart() {
-    cartCount.textContent = `${cart.length} ${cart.length === 1 ? 'track' : 'tracks'}`;
+    cartCount.textContent = String(cart.length);
     cartDownloadBtn.disabled = cart.length === 0;
     cartClearBtn.disabled = cart.length === 0;
     cartSubtitle.textContent = cart.length === 0
         ? 'Search a song and add it here to download all at once later'
-        : 'Download all tracks together, or keep adding more';
+        : `${cart.length} ${cart.length === 1 ? 'track' : 'tracks'} ready — tap to expand`;
 
     if (cart.length === 0) {
         cartList.innerHTML = '<div class="search-empty">Your cart is empty. Search above and tap “Add to cart”.</div>';
@@ -587,8 +621,10 @@ cartDownloadBtn.addEventListener('click', async () => {
         lastInputMode = 'cart';
         setBtnLabel(cartDownloadBtn, 'Download cart');
         cartDownloadBtn.disabled = false;
+        cartCard.classList.add('hidden');
         progressSection.classList.remove('hidden');
         stopBtn.disabled = false;
+        scrollToEl(progressSection);
         pollStatus(data.job_id);
     } catch (e) {
         showError(e.message);
@@ -598,3 +634,4 @@ cartDownloadBtn.addEventListener('click', async () => {
 });
 
 renderCart();
+if (cart.length) expandCart(); else collapseCart();
