@@ -61,6 +61,8 @@ let pollTimer = null;
 let elapsedTimer = null;
 let downloadStartTime = null;
 let cart = loadCart();
+let searchSeq = 0;
+let liveSearchTimer = null;
 
 async function api(path, body) {
     const resp = await fetch(path, {
@@ -164,15 +166,17 @@ async function loadPlaylist(url) {
     }
 }
 
-async function loadSearchResults(query) {
+async function loadSearchResults(query, live = false) {
+    const mySeq = ++searchSeq;
     lastInputMode = 'search';
-    loadBtn.disabled = true;
-    setBtnLabel(loadBtn, 'Searching...');
+    if (!live) { loadBtn.disabled = true; setBtnLabel(loadBtn, 'Searching...'); }
+    else setBtnLabel(loadBtn, 'Search');
     spinner.classList.remove('hidden');
     hideResultCards();
 
     try {
         const data = await api('/api/search', { query });
+        if (mySeq !== searchSeq) return;
         currentSearchResults = data.results;
         searchQueryText.textContent = `"${query}"`;
         searchCount.textContent = `${data.total} results`;
@@ -196,11 +200,14 @@ async function loadSearchResults(query) {
         searchInfo.classList.remove('hidden');
         expand(searchToggle, searchBody);
     } catch (e) {
+        if (mySeq !== searchSeq) return;
         showError(e.message);
     } finally {
-        loadBtn.disabled = false;
-        setBtnLabel(loadBtn, 'Search');
-        spinner.classList.add('hidden');
+        if (mySeq === searchSeq) {
+            loadBtn.disabled = false;
+            setBtnLabel(loadBtn, 'Search');
+            spinner.classList.add('hidden');
+        }
     }
 }
 
@@ -501,7 +508,28 @@ urlInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') loadBtn.click();
 });
 
-urlInput.addEventListener('input', clearError);
+urlInput.addEventListener('input', () => {
+    clearError();
+    if (liveSearchTimer) { clearTimeout(liveSearchTimer); liveSearchTimer = null; }
+    const v = urlInput.value.trim();
+    if (!v) {
+        searchSeq++;
+        hideResultCards();
+        spinner.classList.add('hidden');
+        return;
+    }
+    if (isSpotifyUrl(v)) {
+        searchSeq++;
+        hideResultCards();
+        spinner.classList.add('hidden');
+        return;
+    }
+    if (v.length < 2) return;
+    liveSearchTimer = setTimeout(() => {
+        liveSearchTimer = null;
+        loadSearchResults(v, true);
+    }, 350);
+});
 
 function scrollToEl(el) {
     el.scrollIntoView({ behavior: 'smooth', block: 'start' });
