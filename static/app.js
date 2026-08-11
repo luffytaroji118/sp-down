@@ -167,6 +167,7 @@ async function loadPlaylist(url) {
 
         playlistInfo.classList.remove('hidden');
         expand(playlistToggle, playlistBody);
+        refreshCartButtons();
     } catch (e) {
         showError(e.message);
     } finally {
@@ -209,6 +210,7 @@ async function loadSearchResults(query, live = false) {
         }
         searchInfo.classList.remove('hidden');
         expand(searchToggle, searchBody);
+        refreshCartButtons();
     } catch (e) {
         if (mySeq !== searchSeq) return;
         showError(e.message);
@@ -221,17 +223,43 @@ async function loadSearchResults(query, live = false) {
     }
 }
 
+function inCart(result) {
+    return cart.some(c => cartKey(c) === cartKey(result));
+}
+
+function markCartBtn(btn, inCart) {
+    if (inCart) {
+        setBtnLabel(btn, 'Added');
+        btn.disabled = true;
+        btn.classList.add('in-cart');
+    } else {
+        setBtnLabel(btn, 'Add to cart');
+        btn.disabled = false;
+        btn.classList.remove('in-cart');
+    }
+}
+
+function refreshCartButtons() {
+    document.querySelectorAll('.search-cart-btn').forEach(btn => {
+        const idx = parseInt(btn.dataset.index, 10);
+        const r = currentSearchResults[idx];
+        if (r) markCartBtn(btn, inCart(r));
+    });
+    document.querySelectorAll('.playlist-cart-btn').forEach(btn => {
+        const idx = parseInt(btn.dataset.index, 10);
+        const t = loadedTracks[idx];
+        if (t) markCartBtn(btn, inCart({ title: t.title, artists: t.artists, video_url: '', duration_ms: t.duration_ms }));
+    });
+}
+
 searchList.addEventListener('click', async (e) => {
     const cartBtn = e.target.closest('.search-cart-btn');
     if (cartBtn) {
         const idx = parseInt(cartBtn.dataset.index, 10);
         const result = currentSearchResults[idx];
-        if (result) {
+        if (result && !inCart(result)) {
             addToCart(result);
-            const orig = cartBtn.firstElementChild.textContent;
-            setBtnLabel(cartBtn, 'Added');
-            cartBtn.disabled = true;
-            setTimeout(() => { setBtnLabel(cartBtn, orig); cartBtn.disabled = false; }, 900);
+            markCartBtn(cartBtn, true);
         }
         return;
     }
@@ -272,11 +300,11 @@ trackList.addEventListener('click', async (e) => {
         const idx = parseInt(cartBtn.dataset.index, 10);
         const t = loadedTracks[idx];
         if (!t) return;
-        addToCart({ title: t.title, artists: t.artists, video_url: '', duration_ms: t.duration_ms });
-        const orig = cartBtn.querySelector('.btn-text') ? cartBtn.firstElementChild.textContent : '';
-        setBtnLabel(cartBtn, 'Added');
-        cartBtn.disabled = true;
-        setTimeout(() => { if (orig) setBtnLabel(cartBtn, orig); cartBtn.disabled = false; }, 900);
+        const item = { title: t.title, artists: t.artists, video_url: '', duration_ms: t.duration_ms };
+        if (!inCart(item)) {
+            addToCart(item);
+            markCartBtn(cartBtn, true);
+        }
         return;
     }
     const dlBtn = e.target.closest('.playlist-download-btn');
@@ -659,6 +687,7 @@ function removeFromCart(pos) {
     cart.splice(pos, 1);
     saveCart();
     renderCart();
+    refreshCartButtons();
 }
 
 function clearCart() {

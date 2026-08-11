@@ -71,6 +71,7 @@ input::placeholder { color: #657182; }
 .btn-red { background: rgba(255, 95, 95, .14); border: 1px solid rgba(255, 95, 95, .3); color: #ff9d9d; min-height: 38px; padding: 8px 13px; }
 .btn-ghost { background: rgba(255, 255, 255, .06); border: 1px solid var(--line); color: var(--text); min-height: 43px; padding: 10px 16px; }
 .btn-ghost:hover:not(:disabled) { background: rgba(255, 255, 255, .1); }
+.btn-ghost.in-cart { background: rgba(184, 243, 74, .12); border-color: rgba(184, 243, 74, .3); color: var(--accent); }
 .btn-sm { min-height: 36px; padding: 7px 12px; font-size: 11px; gap: 7px; flex: 0 0 auto; }
 .btn-sm .btn-arrow { font-size: 14px; }
 .btn-large { margin-top: 18px; min-height: 52px; padding: 14px 24px; font-size: 14px; }
